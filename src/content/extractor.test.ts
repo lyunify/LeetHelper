@@ -44,10 +44,10 @@ describe('extractProblemData', () => {
   it('trims whitespace from extracted text', () => {
     document.body.innerHTML = `
       <div data-cy="question-title">  Two Sum  </div>
-      <div data-track-load="description_content">  Given an array  </div>
+      <div data-track-load="description_content">  Given an array of integers nums and an integer target  </div>
     `
     const result = extractProblemData()
     expect(result?.title).toBe('Two Sum')
-    expect(result?.description).toBe('Given an array')
+    expect(result?.description).toBe('Given an array of integers nums and an integer target')
   })
 })
