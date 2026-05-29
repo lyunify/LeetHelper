@@ -70,18 +70,43 @@ export default function Panel({ title, description }: PanelProps) {
     ? tab === 'optimized' ? result.optimized : result.bruteForce
     : null
 
-  // Collapsed: show only a vertical tab pinned to the right edge
+  // Collapsed: vertical tab pinned to right edge — drag to move up/down, click to expand
   if (collapsed) {
+    const handleCollapsedMouseDown = (e: React.MouseEvent) => {
+      const startY = e.clientY
+      const startPosY = position.y
+      let moved = false
+
+      const onMove = (ev: MouseEvent) => {
+        if (Math.abs(ev.clientY - startY) > 4) moved = true
+        setPosition(p => ({
+          ...p,
+          y: Math.max(0, Math.min(window.innerHeight - 60, startPosY + (ev.clientY - startY))),
+        }))
+      }
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        if (!moved) setCollapsed(false)
+      }
+
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      e.preventDefault()
+    }
+
     return (
-      <div style={{ position: 'fixed', right: 0, top: position.y, zIndex: 9999 }}>
-        <button
-          onClick={() => setCollapsed(false)}
-          className="bg-indigo-600 text-white px-1.5 py-4 rounded-l-lg text-xs font-bold shadow-lg hover:bg-indigo-700 transition-colors"
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', cursor: 'pointer' }}
-          title="展开 LeetHelper"
+      <div
+        onMouseDown={handleCollapsedMouseDown}
+        style={{ position: 'fixed', right: 0, top: position.y, zIndex: 9999, cursor: 'grab' }}
+        title="拖动调整位置，点击展开"
+      >
+        <div
+          className="bg-indigo-600 text-white px-1.5 py-4 rounded-l-lg text-xs font-bold shadow-lg hover:bg-indigo-700 transition-colors select-none"
+          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
           ▶ LeetHelper
-        </button>
+        </div>
       </div>
     )
   }
