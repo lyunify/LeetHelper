@@ -38,7 +38,7 @@ export function waitForProblemData(timeoutMs = 10000): Promise<ProblemData> {
     if (check()) return
 
     const observer = new MutationObserver(() => { if (check()) observer.disconnect() })
-    observer.observe(document.body, { childList: true, subtree: true })
+    observer.observe(document.body ?? document.documentElement, { childList: true, subtree: true })
 
     setTimeout(() => {
       observer.disconnect()
