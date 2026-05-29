@@ -55,6 +55,7 @@ Requirements:
     ],
   })
 
+  if (!response.content.length) throw new Error('Claude 返回了空响应，请重试')
   const block = response.content[0]
   if (block.type !== 'text') throw new Error('Unexpected response type from Claude')
 
@@ -64,7 +65,11 @@ Requirements:
     text = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
   }
 
-  return JSON.parse(text) as AnalysisResult
+  try {
+    return JSON.parse(text) as AnalysisResult
+  } catch {
+    throw new Error('解析 AI 响应失败，请重试')
+  }
 }
 
 chrome.runtime.onMessage.addListener(
