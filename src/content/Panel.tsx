@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { AnalysisResult, ExtensionMessage } from '../shared/types'
+import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
 import { getStorage } from '../shared/storage'
+import { fetchTopSolutions, getTitleSlug } from './leetcode-api'
+import type { LeetCodeSolution } from './leetcode-api'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
@@ -13,8 +15,11 @@ interface PanelProps {
 export default function Panel({ title, description }: PanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
+  const [lcIndex, setLcIndex] = useState(0)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
+  const [source, setSource] = useState<SolutionSource>('ai')
   const [collapsed, setCollapsed] = useState(false)
 
   const [position, setPosition] = useState({ x: window.innerWidth - 308, y: 80 })
@@ -44,7 +49,7 @@ export default function Panel({ title, description }: PanelProps) {
     e.preventDefault()
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyzeAI = async () => {
     setState('loading')
     try {
       const { codingLanguage, analysisLanguage } = await getStorage()
@@ -66,9 +71,38 @@ export default function Panel({ title, description }: PanelProps) {
     }
   }
 
+  const handleFetchLeetCode = async () => {
+    setState('loading')
+    try {
+      const titleSlug = getTitleSlug()
+      if (!titleSlug) throw new Error('无法识别题目链接，请确认在题目页面')
+      const { codingLanguage } = await getStorage()
+      const solutions = await fetchTopSolutions(titleSlug, codingLanguage, 5)
+      setLcSolutions(solutions)
+      setLcIndex(0)
+      setState('result')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '获取社区题解失败，请确认已登录 LeetCode')
+      setState('error')
+    }
+  }
+
+  const handleAnalyze = () => {
+    if (source === 'ai') handleAnalyzeAI()
+    else handleFetchLeetCode()
+  }
+
+  const handleReset = () => {
+    setState('idle')
+    setResult(null)
+    setLcSolutions([])
+  }
+
   const activeSolution = result
     ? tab === 'optimized' ? result.optimized : result.bruteForce
     : null
+
+  const currentLcSolution = lcSolutions[lcIndex] ?? null
 
   // Collapsed: vertical tab pinned to right edge — drag to move up/down, click to expand
   if (collapsed) {
@@ -162,18 +196,57 @@ export default function Panel({ title, description }: PanelProps) {
       >
         <div className="p-3">
           {state === 'idle' && (
-            <button
-              onClick={handleAnalyze}
-              className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              分析题目
-            </button>
+            <div className="space-y-2">
+              {/* Source toggle */}
+              <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => setSource('ai')}
+                  className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
+                    source === 'ai'
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  ✨ AI 解析
+                </button>
+                <button
+                  onClick={() => setSource('leetcode')}
+                  className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
+                    source === 'leetcode'
+                      ? 'bg-white text-orange-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  🏆 社区题解
+                </button>
+              </div>
+
+              {source === 'leetcode' && (
+                <p className="text-xs text-gray-400 text-center leading-relaxed">
+                  获取 LeetCode 社区最高赞题解<br />
+                  需要已登录 LeetCode
+                </p>
+              )}
+
+              <button
+                onClick={handleAnalyze}
+                className={`w-full text-white py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  source === 'ai'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'bg-orange-500 hover:bg-orange-600'
+                }`}
+              >
+                {source === 'ai' ? '分析题目' : '获取社区题解'}
+              </button>
+            </div>
           )}
 
           {state === 'loading' && (
             <div className="text-center py-6 text-gray-500">
               <div className="text-2xl mb-2 animate-spin inline-block">⟳</div>
-              <p className="text-sm">分析中，请稍候...</p>
+              <p className="text-sm">
+                {source === 'ai' ? '分析中，请稍候...' : '获取社区题解中...'}
+              </p>
             </div>
           )}
 
@@ -183,7 +256,7 @@ export default function Panel({ title, description }: PanelProps) {
                 {error}
               </div>
               <button
-                onClick={() => setState('idle')}
+                onClick={handleReset}
                 className="w-full border border-gray-200 text-gray-600 py-1.5 rounded-lg text-sm hover:bg-gray-50"
               >
                 重试
@@ -191,7 +264,8 @@ export default function Panel({ title, description }: PanelProps) {
             </div>
           )}
 
-          {state === 'result' && result && (
+          {/* AI result */}
+          {state === 'result' && source === 'ai' && result && (
             <div className="space-y-3">
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase mb-1">题目解释</p>
@@ -248,10 +322,70 @@ export default function Panel({ title, description }: PanelProps) {
               </div>
 
               <button
-                onClick={() => setState('idle')}
+                onClick={handleReset}
                 className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
               >
                 重新分析
+              </button>
+            </div>
+          )}
+
+          {/* LeetCode community solutions result */}
+          {state === 'result' && source === 'leetcode' && lcSolutions.length > 0 && (
+            <div className="space-y-3">
+              {/* Solution navigator */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-orange-600">
+                  🏆 社区题解 ({lcSolutions.length} 个)
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setLcIndex(i => Math.max(0, i - 1))}
+                    disabled={lcIndex === 0}
+                    className="text-xs px-1.5 py-0.5 border border-gray-200 rounded disabled:opacity-30 hover:bg-gray-50"
+                  >
+                    ‹
+                  </button>
+                  <span className="text-xs text-gray-500">{lcIndex + 1}/{lcSolutions.length}</span>
+                  <button
+                    onClick={() => setLcIndex(i => Math.min(lcSolutions.length - 1, i + 1))}
+                    disabled={lcIndex === lcSolutions.length - 1}
+                    className="text-xs px-1.5 py-0.5 border border-gray-200 rounded disabled:opacity-30 hover:bg-gray-50"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+
+              {currentLcSolution && (
+                <>
+                  {/* Solution meta */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-700 leading-snug">{currentLcSolution.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                      <span>@{currentLcSolution.author}</span>
+                      <span>👍 {currentLcSolution.voteCount}</span>
+                    </div>
+                  </div>
+
+                  {/* Code */}
+                  {currentLcSolution.code ? (
+                    <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
+                      {currentLcSolution.code}
+                    </pre>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
+                      该题解未包含代码块，可能是图文格式
+                    </div>
+                  )}
+                </>
+              )}
+
+              <button
+                onClick={handleReset}
+                className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
+              >
+                返回
               </button>
             </div>
           )}

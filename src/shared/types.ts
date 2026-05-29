@@ -30,6 +30,8 @@ export interface AnalysisRequest {
   analysisLanguage: AnalysisLanguage
 }
 
+export type SolutionSource = 'ai' | 'leetcode'
+
 export type ExtensionMessage =
   | { type: 'ANALYZE_PROBLEM'; payload: AnalysisRequest }
   | { type: 'ANALYSIS_RESULT'; payload: AnalysisResult }
