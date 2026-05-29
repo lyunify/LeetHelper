@@ -19,18 +19,23 @@ export default function Panel({ title, description }: PanelProps) {
 
   const handleAnalyze = async () => {
     setState('loading')
-    const { codingLanguage, analysisLanguage } = await getStorage()
+    try {
+      const { codingLanguage, analysisLanguage } = await getStorage()
 
-    const response = await chrome.runtime.sendMessage({
-      type: 'ANALYZE_PROBLEM',
-      payload: { title, description, codingLanguage, analysisLanguage },
-    } satisfies ExtensionMessage) as ExtensionMessage
+      const response = await chrome.runtime.sendMessage({
+        type: 'ANALYZE_PROBLEM',
+        payload: { title, description, codingLanguage, analysisLanguage },
+      } satisfies ExtensionMessage) as ExtensionMessage
 
-    if (response.type === 'ANALYSIS_RESULT') {
-      setResult(response.payload)
-      setState('result')
-    } else if (response.type === 'ANALYSIS_ERROR') {
-      setError(response.payload.message)
+      if (response.type === 'ANALYSIS_RESULT') {
+        setResult(response.payload)
+        setState('result')
+      } else if (response.type === 'ANALYSIS_ERROR') {
+        setError(response.payload.message)
+        setState('error')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '发生未知错误，请刷新页面重试')
       setState('error')
     }
   }
