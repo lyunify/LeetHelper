@@ -74,10 +74,18 @@ export async function fetchTopSolutions(
 ): Promise<LeetCodeSolution[]> {
   const langTag = LANG_TAG_MAP[codingLanguage] ?? 'java'
 
+  // LeetCode requires the CSRF token as a header for POST requests
+  const csrfToken = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('csrftoken='))
+    ?.split('=')[1] ?? ''
+
   const response = await fetch('https://leetcode.com/graphql/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-csrftoken': csrfToken,
+      'Referer': 'https://leetcode.com',
     },
     credentials: 'include',
     body: JSON.stringify({
