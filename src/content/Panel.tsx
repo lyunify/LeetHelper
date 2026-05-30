@@ -95,7 +95,7 @@ function LoadingSkeleton({ source }: { source: SolutionSource }) {
   )
 }
 
-function CodeBlock({ code, lang }: { code: string; lang?: string }) {
+function CodeBlock({ code, lang, fontSize = 'xs' }: { code: string; lang?: string; fontSize?: 'xs' | 'sm' }) {
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -127,7 +127,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
       >
         {copied ? '✓' : 'copy'}
       </button>
-      <pre className="hljs bg-gray-900 text-xs p-4 rounded-lg overflow-x-auto leading-relaxed" style={{ margin: 0 }}>
+      <pre className={`hljs bg-gray-900 text-${fontSize} p-4 rounded-lg overflow-x-auto leading-relaxed`} style={{ margin: 0 }}>
         {highlighted
           ? <code dangerouslySetInnerHTML={{ __html: highlighted }} />
           : <code>{code}</code>
@@ -149,6 +149,12 @@ function PanelInner({ title, description }: PanelProps) {
   const [tab, setTab] = useState<SolutionTab>('optimized')
   const [source, setSource] = useState<SolutionSource>('ai')
   const [collapsed, setCollapsed] = useState(false)
+  const [codeSize, setCodeSize] = useState<'xs' | 'sm'>('xs')
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  // Parse problem number from title (e.g. "8. String to Integer (atoi)")
+  const problemNumber = title.match(/^(\d+)\./)?.[1] ?? null
+  const problemTitle = problemNumber ? title.replace(/^\d+\.\s*/, '') : title
 
   const [position, setPosition] = useState(() => {
     try {
@@ -215,6 +221,11 @@ function PanelInner({ title, description }: PanelProps) {
   useEffect(() => {
     try { localStorage.setItem('leet-helper-size', JSON.stringify(size)) } catch { /* ignore */ }
   }, [size])
+
+  // Scroll body to top when switching solutions
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [lcIndex, state])
 
   useEffect(() => {
     const sol = lcSolutions[lcIndex]
@@ -348,14 +359,33 @@ function PanelInner({ title, description }: PanelProps) {
         className="bg-indigo-600 text-white px-3 py-2 flex items-center justify-between rounded-t-lg shadow-lg"
         style={{ cursor: 'grab', minWidth: 240, userSelect: 'none' }}
       >
-        <span className="font-bold text-sm shrink-0">⚡ LeetHelper</span>
-        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
-          <span className="text-xs text-indigo-200 truncate" title={title}>{title}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="font-bold text-sm">⚡ LeetHelper</span>
+          {problemNumber && (
+            <span className="text-[10px] bg-indigo-500 text-indigo-100 px-1.5 py-0.5 rounded font-medium">
+              #{problemNumber}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+          <span className="text-xs text-indigo-200 truncate" title={problemTitle}>{problemTitle}</span>
+          <div className="flex items-center gap-0.5 shrink-0" onMouseDown={e => e.stopPropagation()}>
+            <button
+              onClick={() => setCodeSize('xs')}
+              className={`text-[10px] px-1 py-0.5 rounded transition-colors ${codeSize === 'xs' ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
+              title="小字体"
+            >A</button>
+            <button
+              onClick={() => setCodeSize('sm')}
+              className={`text-xs px-1 py-0.5 rounded transition-colors ${codeSize === 'sm' ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
+              title="大字体"
+            >A</button>
+          </div>
           <button
             onMouseDown={e => e.stopPropagation()}
             onClick={() => setCollapsed(true)}
-            className="text-indigo-200 hover:text-white text-sm leading-none px-1"
-            title="收起"
+            className="text-indigo-200 hover:text-white text-sm leading-none px-1 shrink-0"
+            title="收起 (Option+L)"
           >
             ◀
           </button>
@@ -364,6 +394,8 @@ function PanelInner({ title, description }: PanelProps) {
 
       {/* Body */}
       <div
+        ref={bodyRef}
+        className="lh-body"
         style={{
           position: 'relative',
           width: size.w,
@@ -463,7 +495,7 @@ function PanelInner({ title, description }: PanelProps) {
 
           {/* AI result */}
           {state === 'result' && source === 'ai' && result && (
-            <div className="space-y-3">
+            <div className="space-y-3 lh-fade">
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase mb-1">题目解释</p>
                 <p className="text-sm text-gray-700 leading-relaxed">{result.explanation}</p>
@@ -507,7 +539,7 @@ function PanelInner({ title, description }: PanelProps) {
                 {activeSolution && (
                   <div className="space-y-2">
                     <p className="text-xs text-gray-600 leading-relaxed">{activeSolution.explanation}</p>
-                    <CodeBlock code={activeSolution.code} />
+                    <CodeBlock code={activeSolution.code} fontSize={codeSize} />
                     {(activeSolution.timeComplexity || activeSolution.spaceComplexity) && (
                       <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs space-y-1">
                         <div className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-2">Complexity</div>
@@ -519,23 +551,29 @@ function PanelInner({ title, description }: PanelProps) {
                 )}
               </div>
 
-              <button
-                onClick={handleReset}
-                className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
-              >
-                重新分析
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={handleReset}
+                  className="text-xs text-gray-400 hover:text-gray-600 py-1"
+                >
+                  重新分析
+                </button>
+                <span className="text-[10px] text-gray-300 italic">AI 生成，仅供参考</span>
+              </div>
             </div>
           )}
 
           {/* LeetCode community solutions result */}
           {state === 'result' && source === 'leetcode' && lcSolutions.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-3 lh-fade">
               {/* Solution navigator */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-orange-600">
-                  🏆 社区题解 ({lcSolutions.length} 个)
-                </span>
+                <div>
+                  <span className="text-xs font-semibold text-orange-600">
+                    🏆 社区题解 ({lcSolutions.length} 个)
+                  </span>
+                  <span className="text-[10px] text-gray-400 ml-1.5">按浏览量排序</span>
+                </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setLcIndex(i => Math.max(0, i - 1))}
@@ -559,7 +597,18 @@ function PanelInner({ title, description }: PanelProps) {
                 <>
                   {/* Solution meta */}
                   <div>
-                    <p className="text-xs font-medium text-gray-700 leading-snug">{currentLcSolution.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium text-gray-700 leading-snug flex-1">{currentLcSolution.title}</p>
+                      <a
+                        href={`https://leetcode.com/problems/${getTitleSlug()}/solutions/${currentLcSolution.slug}/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-indigo-400 hover:text-indigo-600 shrink-0 mt-0.5"
+                        title="在 LeetCode 查看原文"
+                      >
+                        原文 ↗
+                      </a>
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                       <span>@{currentLcSolution.author}</span>
                       <span>👁 {currentLcSolution.voteCount >= 1000 ? `${(currentLcSolution.voteCount / 1000).toFixed(1)}K` : currentLcSolution.voteCount}</span>
@@ -599,7 +648,7 @@ function PanelInner({ title, description }: PanelProps) {
                           </div>
                         )}
                         {code ? (
-                          <CodeBlock code={code} lang={selectedLang} />
+                          <CodeBlock code={code} lang={selectedLang} fontSize={codeSize} />
                         ) : (
                           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center space-y-1.5">
                             <p>暂无法提取代码块</p>

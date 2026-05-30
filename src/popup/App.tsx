@@ -91,7 +91,10 @@ function SettingsView({ onNeedOnboarding, onHistory }: { onNeedOnboarding: () =>
   return (
     <div className="w-72 p-4 font-sans bg-white">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-bold text-indigo-600">⚡ LeetHelper</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-base font-bold text-indigo-600">⚡ LeetHelper</h1>
+          <span className="text-[10px] text-gray-400">v0.1.0</span>
+        </div>
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${hasKey ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}>
           {hasKey ? '● 已连接' : '● 未配置'}
         </span>
