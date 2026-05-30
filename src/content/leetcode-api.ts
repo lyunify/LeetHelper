@@ -55,10 +55,14 @@ function stripLangPrefix(code: string): string {
   return code.replace(/^[^\n]{0,40}\[\]\s*\n/, '').trim()
 }
 
+const CODE_KEYWORDS = /\b(class|def|function|return|for|while|if|else|int|void|public|private|var|let|const|import|print|cout|endl|vector|map|set|unordered_map|HashMap|ArrayList|List|Dict|tuple)\b/
+
 function looksLikeCode(text: string): boolean {
   if (text.length < 20) return false
   // Skip test-case / example blocks
   if (/^(Input|Output|Explanation|Example|Constraints)/.test(text)) return false
+  // Must contain at least one programming keyword
+  if (!CODE_KEYWORDS.test(text)) return false
   return true
 }
 

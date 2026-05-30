@@ -24,18 +24,35 @@ export default function Panel({ title, description }: PanelProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   const [position, setPosition] = useState({ x: window.innerWidth - 308, y: 80 })
+  const [size, setSize] = useState({ w: 288, h: 480 })
   const isDragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
+  const isResizing = useRef(false)
+  const resizeStart = useRef({ x: 0, y: 0, w: 288, h: 480, px: 0 })
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return
-      setPosition({
-        x: Math.max(0, Math.min(window.innerWidth - 100, e.clientX - dragOffset.current.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dragOffset.current.y)),
-      })
+      if (isDragging.current) {
+        setPosition({
+          x: Math.max(0, Math.min(window.innerWidth - 100, e.clientX - dragOffset.current.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 60, e.clientY - dragOffset.current.y)),
+        })
+      }
+      if (isResizing.current) {
+        const { x, y, w, h, px } = resizeStart.current
+        const dw = x - e.clientX  // dragging left increases width
+        const dh = e.clientY - y  // dragging down increases height
+        const newW = Math.max(240, Math.min(560, w + dw))
+        const newH = Math.max(200, Math.min(window.innerHeight * 0.8, h + dh))
+        setSize({ w: newW, h: newH })
+        // shift panel left so right edge stays fixed
+        setPosition(p => ({ ...p, x: px - newW }))
+      }
     }
-    const onMouseUp = () => { isDragging.current = false }
+    const onMouseUp = () => {
+      isDragging.current = false
+      isResizing.current = false
+    }
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
     return () => {
@@ -187,16 +204,12 @@ export default function Panel({ title, description }: PanelProps) {
         </div>
       </div>
 
-      {/* Body - resizable */}
+      {/* Body */}
       <div
         style={{
-          width: 288,
-          height: 480,
-          minWidth: 240,
-          minHeight: 200,
-          maxWidth: 560,
-          maxHeight: '80vh',
-          resize: 'both',
+          position: 'relative',
+          width: size.w,
+          height: size.h,
           overflow: 'auto',
           background: 'white',
           border: '1px solid #e5e7eb',
@@ -205,6 +218,20 @@ export default function Panel({ title, description }: PanelProps) {
           boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
         }}
       >
+        {/* Bottom-left resize handle */}
+        <div
+          onMouseDown={e => {
+            e.preventDefault()
+            isResizing.current = true
+            resizeStart.current = { x: e.clientX, y: e.clientY, w: size.w, h: size.h, px: position.x + size.w }
+          }}
+          style={{
+            position: 'absolute', bottom: 0, left: 0,
+            width: 14, height: 14, cursor: 'sw-resize', zIndex: 10,
+            background: 'linear-gradient(135deg, transparent 50%, #d1d5db 50%)',
+            transform: 'scaleX(-1)',
+          }}
+        />
         <div className="p-3">
           {state === 'idle' && (
             <div className="space-y-2">
