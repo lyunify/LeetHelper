@@ -68,35 +68,55 @@ function looksLikeCode(text: string): boolean {
   return true
 }
 
-function bestCode(candidates: string[]): string {
-  // Return the longest candidate (most likely to be the full solution)
-  return candidates.reduce((a, b) => b.length > a.length ? b : a, '')
+const LANG_MAP: Record<string, string> = {
+  python: 'Python', python3: 'Python', py: 'Python',
+  java: 'Java',
+  javascript: 'JavaScript', js: 'JavaScript',
+  typescript: 'TypeScript', ts: 'TypeScript',
+  cpp: 'C++', 'c++': 'C++', c: 'C++',
+  go: 'Go', golang: 'Go',
+  rust: 'Rust',
+  csharp: 'C#', cs: 'C#',
+  kotlin: 'Kotlin',
+  swift: 'Swift',
 }
 
-function extractCodeFromContent(normalized: string): string {
-  const candidates: string[] = []
+function detectLang(hint: string): string {
+  const key = hint.toLowerCase().trim().replace(/[^a-z0-9+#]/g, '')
+  return LANG_MAP[key] ?? ''
+}
+
+// Returns map of lang → code. Keeps longest per language.
+export function extractAllCodes(normalized: string): Record<string, string> {
+  const result: Record<string, string> = {}
+
+  function add(lang: string, code: string) {
+    if (!looksLikeCode(code)) return
+    const key = lang || 'Other'
+    if (!result[key] || code.length > result[key].length) result[key] = code
+  }
 
   const parser = new DOMParser()
   const doc = parser.parseFromString(normalized, 'text/html')
 
   for (const el of doc.querySelectorAll('pre code')) {
-    const code = stripLangPrefix(el.textContent?.trim() ?? '')
-    if (looksLikeCode(code)) candidates.push(code)
+    const cls = el.className + ' ' + (el.parentElement?.className ?? '')
+    const langMatch = cls.match(/language-(\w+)/)
+    add(detectLang(langMatch?.[1] ?? ''), stripLangPrefix(el.textContent?.trim() ?? ''))
   }
-
   for (const el of doc.querySelectorAll('pre')) {
-    const code = stripLangPrefix(el.textContent?.trim() ?? '')
-    if (looksLikeCode(code)) candidates.push(code)
+    const cls = el.className
+    const langMatch = cls.match(/language-(\w+)/)
+    add(detectLang(langMatch?.[1] ?? ''), stripLangPrefix(el.textContent?.trim() ?? ''))
   }
 
-  const fenceRegex = /```[^\n`]*\n([\s\S]*?)```/g
+  const fenceRegex = /```([^\n`]*)\n([\s\S]*?)```/g
   let m: RegExpExecArray | null
   while ((m = fenceRegex.exec(normalized)) !== null) {
-    const code = stripLangPrefix(m[1].trim())
-    if (looksLikeCode(code)) candidates.push(code)
+    add(detectLang(m[1].trim().split(/\s/)[0]), stripLangPrefix(m[2].trim()))
   }
 
-  return candidates.length ? bestCode(candidates) : ''
+  return result
 }
 
 function extractComplexity(normalized: string): { time: string; space: string } {
@@ -154,7 +174,7 @@ const SOLUTION_DETAIL_QUERY = `
   }
 `
 
-export async function fetchSolutionContent(slug: string): Promise<{ code: string; timeComplexity: string; spaceComplexity: string }> {
+export async function fetchSolutionContent(slug: string): Promise<{ code: string; allCodes: Record<string, string>; timeComplexity: string; spaceComplexity: string }> {
   const json = await fetchViaMainWorld({
     operationName: 'ugcArticleSolutionArticle',
     query: SOLUTION_DETAIL_QUERY,
@@ -170,8 +190,13 @@ export async function fetchSolutionContent(slug: string): Promise<{ code: string
 
   const raw = json.data?.ugcArticleSolutionArticle?.content ?? ''
   const normalized = raw.replace(/\\n/g, '\n')
+  const allCodes = extractAllCodes(normalized)
+  const langs = Object.keys(allCodes)
+  // Pick best single code: longest block
+  const code = langs.length ? langs.reduce((a, b) => allCodes[b].length > allCodes[a].length ? b : a, langs[0]) : ''
   return {
-    code: extractCodeFromContent(normalized),
+    code: code ? allCodes[code] : '',
+    allCodes,
     ...extractComplexity(normalized),
   }
 }

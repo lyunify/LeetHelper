@@ -17,7 +17,8 @@ export default function Panel({ title, description }: PanelProps) {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
   const [lcIndex, setLcIndex] = useState(0)
-  const [lcDetail, setLcDetail] = useState<Record<string, { code: string; timeComplexity: string; spaceComplexity: string } | null>>({}) // slug -> detail (null = fetch failed)
+  const [lcDetail, setLcDetail] = useState<Record<string, { code: string; allCodes: Record<string, string>; timeComplexity: string; spaceComplexity: string } | null>>({})
+  const [lcLang, setLcLang] = useState<Record<string, string>>({}) // slug -> selected lang
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
   const [source, setSource] = useState<SolutionSource>('ai')
@@ -124,6 +125,7 @@ export default function Panel({ title, description }: PanelProps) {
     setResult(null)
     setLcSolutions([])
     setLcDetail({})
+    setLcLang({})
   }
 
   const activeSolution = result
@@ -409,15 +411,35 @@ export default function Panel({ title, description }: PanelProps) {
                   {/* Code + Complexity */}
                   {(() => {
                     const detail = lcDetail[currentLcSolution.slug]
-                    const code = currentLcSolution.code || detail?.code
                     const fetching = !currentLcSolution.code && detail === undefined
                     if (fetching) return (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-400 text-center animate-pulse">
                         加载代码中...
                       </div>
                     )
+                    const allCodes = detail?.allCodes ?? {}
+                    const langs = Object.keys(allCodes)
+                    const selectedLang = lcLang[currentLcSolution.slug] ?? langs[0] ?? ''
+                    const code = currentLcSolution.code || (selectedLang ? allCodes[selectedLang] : detail?.code) || ''
                     return (
                       <div className="space-y-2">
+                        {langs.length > 1 && (
+                          <div className="flex flex-wrap gap-1">
+                            {langs.map(lang => (
+                              <button
+                                key={lang}
+                                onClick={() => setLcLang(prev => ({ ...prev, [currentLcSolution.slug]: lang }))}
+                                className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                                  (lcLang[currentLcSolution.slug] ?? langs[0]) === lang
+                                    ? 'bg-orange-100 border-orange-400 text-orange-700 font-medium'
+                                    : 'border-gray-200 text-gray-400 hover:bg-gray-50'
+                                }`}
+                              >
+                                {lang}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {code ? (
                           <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
                             {code}
