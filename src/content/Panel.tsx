@@ -348,9 +348,9 @@ function PanelInner({ title, description }: PanelProps) {
         className="bg-indigo-600 text-white px-3 py-2 flex items-center justify-between rounded-t-lg shadow-lg"
         style={{ cursor: 'grab', minWidth: 240, userSelect: 'none' }}
       >
-        <span className="font-bold text-sm">⚡ LeetHelper</span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-indigo-200 truncate max-w-[120px]" title={title}>{title}</span>
+        <span className="font-bold text-sm shrink-0">⚡ LeetHelper</span>
+        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+          <span className="text-xs text-indigo-200 truncate" title={title}>{title}</span>
           <button
             onMouseDown={e => e.stopPropagation()}
             onClick={() => setCollapsed(true)}
