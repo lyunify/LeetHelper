@@ -22,6 +22,7 @@ const mockResult: AnalysisResult = {
 
 vi.stubGlobal('chrome', {
   runtime: { sendMessage: vi.fn() },
+  tabs: { create: vi.fn() },
   storage: {
     local: {
       get: vi.fn(() => Promise.resolve({ codingLanguage: 'java', analysisLanguage: 'zh' })),

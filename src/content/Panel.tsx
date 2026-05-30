@@ -31,11 +31,13 @@ import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared
 import { getStorage } from '../shared/storage'
 import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
 import type { LeetCodeSolution } from './leetcode-api'
-import { addHistory } from '../shared/history'
+import { addHistory, getHistory, clearHistory } from '../shared/history'
+import type { HistoryEntry } from '../shared/history'
 import type { Difficulty } from './extractor'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
+type PanelTab = 'ai' | 'leetcode' | 'stats' | 'history'
 
 interface PanelProps {
   title: string
@@ -160,6 +162,8 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
   const [source, setSource] = useState<SolutionSource>('ai')
+  const [panelTab, setPanelTab] = useState<PanelTab>('ai')
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([])
   const [collapsed, setCollapsed] = useState(false)
   const [codeSize, setCodeSize] = useState<'xs' | 'sm'>('xs')
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -259,6 +263,22 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [state, source, lcSolutions.length])
+
+  // Load history when switching to stats or history tab
+  useEffect(() => {
+    if (panelTab === 'stats' || panelTab === 'history') {
+      getHistory().then(setHistoryEntries)
+    }
+  }, [panelTab])
+
+  function switchTab(tab: PanelTab) {
+    setPanelTab(tab)
+    if (tab === 'ai') {
+      if (source !== 'ai') { setSource('ai'); handleReset() }
+    } else if (tab === 'leetcode') {
+      if (source !== 'leetcode') { setSource('leetcode'); handleReset() }
+    }
+  }
 
   const currentLcSolution = lcSolutions[lcIndex] ?? null
 
@@ -493,32 +513,141 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
           }}
         />
         <div className="p-3">
-          {state === 'idle' && (
-            <div className="space-y-2">
-              {/* Source toggle */}
-              <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+          {/* Always-visible 4-tab bar */}
+          <div className="flex gap-0.5 p-1 bg-gray-100 rounded-lg mb-3">
+            {([
+              ['ai', '✨ AI', 'text-indigo-700'],
+              ['leetcode', '🏆 社区', 'text-orange-600'],
+              ['stats', '📊 统计', 'text-gray-700'],
+              ['history', '🕐 历史', 'text-gray-700'],
+            ] as [PanelTab, string, string][]).map(([t, label, activeColor]) => (
+              <button
+                key={t}
+                onClick={() => switchTab(t)}
+                className={`flex-1 text-[11px] py-1.5 rounded-md font-medium transition-colors ${
+                  panelTab === t
+                    ? `bg-white ${activeColor} shadow-sm`
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Stats tab */}
+          {panelTab === 'stats' && (() => {
+            const now = Date.now()
+            const todayStart = new Date().setHours(0, 0, 0, 0)
+            const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+            const stats = {
+              total: historyEntries.length,
+              today: historyEntries.filter(e => e.timestamp >= todayStart).length,
+              thisWeek: historyEntries.filter(e => e.timestamp >= weekAgo).length,
+              ai: historyEntries.filter(e => e.source === 'ai').length,
+              lc: historyEntries.filter(e => e.source === 'lc').length,
+            }
+            const days = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date(now - (6 - i) * 86400000)
+              const start = new Date(d).setHours(0, 0, 0, 0)
+              const end = start + 86400000
+              return {
+                label: d.toLocaleDateString([], { weekday: 'short' }),
+                count: historyEntries.filter(e => e.timestamp >= start && e.timestamp < end).length,
+              }
+            })
+            const maxCount = Math.max(...days.map(d => d.count), 1)
+            return (
+              <div className="space-y-4 lh-fade">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: '今日', value: stats.today, color: 'text-indigo-600' },
+                    { label: '本周', value: stats.thisWeek, color: 'text-indigo-600' },
+                    { label: '总计', value: stats.total, color: 'text-gray-700' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-gray-50 rounded-lg p-2.5 text-center">
+                      <div className={`text-xl font-bold ${color}`}>{value}</div>
+                      <div className="text-[10px] text-gray-400">{label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1.5">来源分布</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
+                      <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
+                      <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
+                    </div>
+                    <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
+                      <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
+                      <div className="text-[10px] text-orange-400">🏆 社区题解</div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 7 天</p>
+                  <div className="flex items-end gap-1 h-16">
+                    {days.map(({ label, count }) => (
+                      <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          className="w-full bg-indigo-400 rounded-sm transition-all"
+                          style={{ height: `${(count / maxCount) * 48}px`, minHeight: count > 0 ? 4 : 0 }}
+                        />
+                        <span className="text-[9px] text-gray-400">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* History tab */}
+          {panelTab === 'history' && (
+            <div className="lh-fade">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-gray-400 uppercase font-semibold">浏览历史</span>
                 <button
-                  onClick={() => setSource('ai')}
-                  className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
-                    source === 'ai'
-                      ? 'bg-white text-indigo-700 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                  onClick={() => { clearHistory(); setHistoryEntries([]) }}
+                  className="text-[10px] text-red-400 hover:text-red-600"
                 >
-                  ✨ AI 解析
-                </button>
-                <button
-                  onClick={() => setSource('leetcode')}
-                  className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
-                    source === 'leetcode'
-                      ? 'bg-white text-orange-600 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  🏆 社区题解
+                  清空
                 </button>
               </div>
+              {historyEntries.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-6">暂无记录</div>
+              ) : (
+                <ul className="divide-y divide-gray-50 -mx-3">
+                  {historyEntries.map(e => (
+                    <li
+                      key={e.slug + e.timestamp}
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => chrome.tabs.create({ url: `https://leetcode.com/problems/${e.slug}/` })}
+                    >
+                      <span className={`text-[9px] px-1 py-0.5 rounded font-bold shrink-0 ${e.source === 'ai' ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600'}`}>
+                        {e.source === 'ai' ? 'AI' : 'LC'}
+                      </span>
+                      <span className="flex-1 text-xs text-gray-700 truncate">{e.title}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0">
+                        {(() => {
+                          const diffH = (Date.now() - e.timestamp) / 3600000
+                          return diffH < 24
+                            ? new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : new Date(e.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                        })()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
+          {/* AI / LC tabs - main analysis content */}
+          {(panelTab === 'ai' || panelTab === 'leetcode') && (
+          <div>
+          {state === 'idle' && (
+            <div className="space-y-2">
               {source === 'leetcode' && (
                 <p className="text-xs text-gray-400 text-center leading-relaxed">
                   获取 LeetCode 社区最高赞题解<br />
@@ -757,6 +886,8 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
                 </button>
               </div>
             </div>
+          )}
+          </div>
           )}
         </div>
       </div>
