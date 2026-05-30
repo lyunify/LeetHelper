@@ -446,11 +446,6 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
       >
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="font-bold text-sm">⚡ LeetHelper</span>
-          {problemNumber && (
-            <span className="text-[10px] bg-indigo-500 text-indigo-100 px-1.5 py-0.5 rounded font-medium">
-              #{problemNumber}
-            </span>
-          )}
           {difficulty && (
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${DIFF_STYLE[difficulty]}`}>
               {difficulty}
@@ -458,7 +453,9 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
-          <span className="text-xs text-indigo-200 truncate" title={problemTitle}>{problemTitle}</span>
+          <span className="text-xs text-indigo-200 truncate" title={title}>
+            {problemNumber ? `#${problemNumber} ${problemTitle}` : problemTitle}
+          </span>
           <div className="flex items-center gap-0.5 shrink-0" onMouseDown={e => e.stopPropagation()}>
             <button
               onClick={() => setCodeSize('xs')}
