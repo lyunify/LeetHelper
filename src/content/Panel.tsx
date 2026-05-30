@@ -17,7 +17,7 @@ export default function Panel({ title, description }: PanelProps) {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
   const [lcIndex, setLcIndex] = useState(0)
-  const [lcDetailCode, setLcDetailCode] = useState<Record<string, string | null>>({}) // slug -> code (null = fetching failed)
+  const [lcDetail, setLcDetail] = useState<Record<string, { code: string; timeComplexity: string; spaceComplexity: string } | null>>({}) // slug -> detail (null = fetch failed)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
   const [source, setSource] = useState<SolutionSource>('ai')
@@ -47,10 +47,10 @@ export default function Panel({ title, description }: PanelProps) {
   useEffect(() => {
     const sol = lcSolutions[lcIndex]
     if (!sol || !sol.slug) return
-    if (sol.code || lcDetailCode[sol.slug] !== undefined) return // already have code or already fetched
+    if (sol.code || lcDetail[sol.slug] !== undefined) return // already have code or already fetched
     fetchSolutionContent(sol.slug)
-      .then(code => setLcDetailCode(prev => ({ ...prev, [sol.slug]: code || null })))
-      .catch(() => setLcDetailCode(prev => ({ ...prev, [sol.slug]: null })))
+      .then(detail => setLcDetail(prev => ({ ...prev, [sol.slug]: detail.code || detail.timeComplexity ? detail : null })))
+      .catch(() => setLcDetail(prev => ({ ...prev, [sol.slug]: null })))
   }, [lcIndex, lcSolutions])
 
   const handleDragStart = (e: React.MouseEvent) => {
@@ -106,7 +106,7 @@ export default function Panel({ title, description }: PanelProps) {
     setState('idle')
     setResult(null)
     setLcSolutions([])
-    setLcDetailCode({})
+    setLcDetail({})
   }
 
   const activeSolution = result
@@ -379,23 +379,33 @@ export default function Panel({ title, description }: PanelProps) {
                     </div>
                   </div>
 
-                  {/* Code */}
+                  {/* Code + Complexity */}
                   {(() => {
-                    const code = currentLcSolution.code || lcDetailCode[currentLcSolution.slug]
-                    const fetching = !currentLcSolution.code && lcDetailCode[currentLcSolution.slug] === undefined
+                    const detail = lcDetail[currentLcSolution.slug]
+                    const code = currentLcSolution.code || detail?.code
+                    const fetching = !currentLcSolution.code && detail === undefined
                     if (fetching) return (
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-400 text-center animate-pulse">
                         加载代码中...
                       </div>
                     )
-                    if (code) return (
-                      <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
-                        {code}
-                      </pre>
-                    )
                     return (
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
-                        该题解未包含代码块，可能是图文格式
+                      <div className="space-y-2">
+                        {code ? (
+                          <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
+                            {code}
+                          </pre>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
+                            该题解未包含代码块，可能是图文格式
+                          </div>
+                        )}
+                        {(detail?.timeComplexity || detail?.spaceComplexity) && (
+                          <div className="flex gap-3 text-xs text-gray-500">
+                            {detail.timeComplexity && <span>时间 <strong className="text-gray-700">{detail.timeComplexity}</strong></span>}
+                            {detail.spaceComplexity && <span>空间 <strong className="text-gray-700">{detail.spaceComplexity}</strong></span>}
+                          </div>
+                        )}
                       </div>
                     )
                   })()}

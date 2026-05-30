@@ -6,6 +6,8 @@ export interface LeetCodeSolution {
   voteCount: number
   code: string
   rawContent: string
+  timeComplexity: string
+  spaceComplexity: string
 }
 
 const SOLUTIONS_QUERY = `
@@ -60,10 +62,7 @@ function looksLikeCode(text: string): boolean {
   return true
 }
 
-function extractCodeFromContent(html: string): string {
-  // Normalize literal \n sequences to actual newlines before any processing
-  const normalized = html.replace(/\\n/g, '\n')
-
+function extractCodeFromContent(normalized: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(normalized, 'text/html')
 
@@ -79,11 +78,26 @@ function extractCodeFromContent(html: string): string {
     if (looksLikeCode(code)) return code
   }
 
-  // Markdown fences
-  const fenceMatch = normalized.match(/```[^\n`]*\n([\s\S]*?)```/)
-  if (fenceMatch?.[1]?.trim()) return stripLangPrefix(fenceMatch[1].trim())
+  // Iterate ALL markdown fences — skip example blocks, return first that looks like code
+  const fenceRegex = /```[^\n`]*\n([\s\S]*?)```/g
+  let m: RegExpExecArray | null
+  while ((m = fenceRegex.exec(normalized)) !== null) {
+    const code = stripLangPrefix(m[1].trim())
+    if (looksLikeCode(code)) return code
+  }
 
   return ''
+}
+
+function extractComplexity(normalized: string): { time: string; space: string } {
+  const timeMatch = normalized.match(/[Tt]ime\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/i)
+    ?? normalized.match(/[Tt]ime\s+[Cc]omplexity[^O\n]*?(O\([^)\n]+\))/i)
+  const spaceMatch = normalized.match(/[Ss]pace\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/i)
+    ?? normalized.match(/[Ss]pace\s+[Cc]omplexity[^O\n]*?(O\([^)\n]+\))/i)
+  return {
+    time: timeMatch?.[1] ?? '',
+    space: spaceMatch?.[1] ?? '',
+  }
 }
 
 // Sends a fetch request via the MAIN world script (main-world-fetcher.ts)
@@ -130,7 +144,7 @@ const SOLUTION_DETAIL_QUERY = `
   }
 `
 
-export async function fetchSolutionContent(slug: string): Promise<string> {
+export async function fetchSolutionContent(slug: string): Promise<{ code: string; timeComplexity: string; spaceComplexity: string }> {
   const json = await fetchViaMainWorld({
     operationName: 'ugcArticleSolutionArticle',
     query: SOLUTION_DETAIL_QUERY,
@@ -144,8 +158,12 @@ export async function fetchSolutionContent(slug: string): Promise<string> {
     throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
   }
 
-  const content = json.data?.ugcArticleSolutionArticle?.content ?? ''
-  return extractCodeFromContent(content)
+  const raw = json.data?.ugcArticleSolutionArticle?.content ?? ''
+  const normalized = raw.replace(/\\n/g, '\n')
+  return {
+    code: extractCodeFromContent(normalized),
+    ...extractComplexity(normalized),
+  }
 }
 
 export async function fetchTopSolutions(
@@ -194,6 +212,8 @@ export async function fetchTopSolutions(
       voteCount: Number(node.hitCount ?? 0),
       rawContent: content,
       code: extractCodeFromContent(content),
+      timeComplexity: '',
+      spaceComplexity: '',
     }
   })
 }
