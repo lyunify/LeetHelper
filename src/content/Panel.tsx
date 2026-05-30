@@ -562,7 +562,7 @@ function PanelInner({ title, description }: PanelProps) {
                     <p className="text-xs font-medium text-gray-700 leading-snug">{currentLcSolution.title}</p>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                       <span>@{currentLcSolution.author}</span>
-                      <span>👍 {currentLcSolution.voteCount}</span>
+                      <span>👁 {currentLcSolution.voteCount >= 1000 ? `${(currentLcSolution.voteCount / 1000).toFixed(1)}K` : currentLcSolution.voteCount}</span>
                     </div>
                   </div>
 
