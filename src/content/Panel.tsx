@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
 import { getStorage } from '../shared/storage'
-import { fetchTopSolutions, getTitleSlug } from './leetcode-api'
+import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
 import type { LeetCodeSolution } from './leetcode-api'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
@@ -17,6 +17,7 @@ export default function Panel({ title, description }: PanelProps) {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
   const [lcIndex, setLcIndex] = useState(0)
+  const [lcDetailCode, setLcDetailCode] = useState<Record<string, string | null>>({}) // slug -> code (null = fetching failed)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
   const [source, setSource] = useState<SolutionSource>('ai')
@@ -42,6 +43,15 @@ export default function Panel({ title, description }: PanelProps) {
       document.removeEventListener('mouseup', onMouseUp)
     }
   }, [])
+
+  useEffect(() => {
+    const sol = lcSolutions[lcIndex]
+    if (!sol || !sol.slug) return
+    if (sol.code || lcDetailCode[sol.slug] !== undefined) return // already have code or already fetched
+    fetchSolutionContent(sol.slug)
+      .then(code => setLcDetailCode(prev => ({ ...prev, [sol.slug]: code || null })))
+      .catch(() => setLcDetailCode(prev => ({ ...prev, [sol.slug]: null })))
+  }, [lcIndex, lcSolutions])
 
   const handleDragStart = (e: React.MouseEvent) => {
     isDragging.current = true
@@ -96,6 +106,7 @@ export default function Panel({ title, description }: PanelProps) {
     setState('idle')
     setResult(null)
     setLcSolutions([])
+    setLcDetailCode({})
   }
 
   const activeSolution = result
@@ -369,15 +380,25 @@ export default function Panel({ title, description }: PanelProps) {
                   </div>
 
                   {/* Code */}
-                  {currentLcSolution.code ? (
-                    <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
-                      {currentLcSolution.code}
-                    </pre>
-                  ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
-                      该题解未包含代码块，可能是图文格式
-                    </div>
-                  )}
+                  {(() => {
+                    const code = currentLcSolution.code || lcDetailCode[currentLcSolution.slug]
+                    const fetching = !currentLcSolution.code && lcDetailCode[currentLcSolution.slug] === undefined
+                    if (fetching) return (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-400 text-center animate-pulse">
+                        加载代码中...
+                      </div>
+                    )
+                    if (code) return (
+                      <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
+                        {code}
+                      </pre>
+                    )
+                    return (
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
+                        该题解未包含代码块，可能是图文格式
+                      </div>
+                    )
+                  })()}
                 </>
               )}
 

@@ -16,13 +16,16 @@ window.addEventListener('message', async (event: MessageEvent) => {
     .find(row => row.startsWith('csrftoken='))
     ?.split('=')[1] ?? ''
 
+  let operationName = ''
+  try { operationName = (JSON.parse(body) as { operationName?: string }).operationName ?? '' } catch { /* ignore */ }
+
   try {
     const response = await fetch(ALLOWED_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-csrftoken': csrfToken,
-        'X-Operation-Name': 'ugcArticleSolutionArticles',
+        'X-Operation-Name': operationName,
         'Referer': window.location.href,
       },
       credentials: 'include',

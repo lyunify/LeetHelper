@@ -1,5 +1,6 @@
 export interface LeetCodeSolution {
   id: string
+  slug: string
   title: string
   author: string
   voteCount: number
@@ -105,6 +106,32 @@ function fetchViaMainWorld(body: object): Promise<unknown> {
   })
 }
 
+const SOLUTION_DETAIL_QUERY = `
+  query ugcArticleSolution($slug: String!) {
+    ugcArticleSolution(slug: $slug) {
+      content
+    }
+  }
+`
+
+export async function fetchSolutionContent(slug: string): Promise<string> {
+  const json = await fetchViaMainWorld({
+    operationName: 'ugcArticleSolution',
+    query: SOLUTION_DETAIL_QUERY,
+    variables: { slug },
+  }) as {
+    data?: { ugcArticleSolution?: { content?: string } }
+    errors?: Array<{ message: string }>
+  }
+
+  if (json.errors?.length) {
+    throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
+  }
+
+  const content = json.data?.ugcArticleSolution?.content ?? ''
+  return extractCodeFromContent(content)
+}
+
 export async function fetchTopSolutions(
   titleSlug: string,
   _codingLanguage: string,
@@ -145,6 +172,7 @@ export async function fetchTopSolutions(
     const content = String(node.summary ?? '')
     return {
       id: String(node.uuid ?? node.slug ?? ''),
+      slug: String(node.slug ?? ''),
       title: String(node.title ?? ''),
       author: String((node.author as Record<string, unknown>)?.userName ?? (node.author as Record<string, unknown>)?.userSlug ?? 'anonymous'),
       voteCount: Number(node.hitCount ?? 0),
