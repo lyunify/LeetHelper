@@ -201,36 +201,45 @@ export async function fetchSolutionContent(slug: string): Promise<{ code: string
   }
 }
 
-export async function fetchTopSolutions(
+async function fetchSolutionList(
   titleSlug: string,
-  _codingLanguage: string,
-  limit = 5,
-): Promise<LeetCodeSolution[]> {
+  orderBy: string,
+  count: number,
+): Promise<Array<{ node: Record<string, unknown> }>> {
   const json = await fetchViaMainWorld({
     operationName: 'ugcArticleSolutionArticles',
     query: SOLUTIONS_QUERY,
     variables: {
       questionSlug: titleSlug,
       skip: 0,
-      first: limit,
-      orderBy: 'HOT',
+      first: count,
+      orderBy,
       userInput: '',
       tagSlugs: [],
     },
   }) as {
-    data?: {
-      ugcArticleSolutionArticles?: {
-        edges?: Array<{ node: Record<string, unknown> }>
-      }
-    }
+    data?: { ugcArticleSolutionArticles?: { edges?: Array<{ node: Record<string, unknown> }> } }
     errors?: Array<{ message: string }>
   }
+  if (json.errors?.length) throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
+  return json.data?.ugcArticleSolutionArticles?.edges ?? []
+}
 
-  if (json.errors?.length) {
-    throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
-  }
+export async function fetchTopSolutions(
+  titleSlug: string,
+  _codingLanguage: string,
+  limit = 5,
+): Promise<LeetCodeSolution[]> {
+  // Slot 1: top HOT result (usually LeetCode official)
+  // Slots 2-N: top voted community solutions
+  const [hotEdges, votedEdges] = await Promise.all([
+    fetchSolutionList(titleSlug, 'HOT', 1),
+    fetchSolutionList(titleSlug, 'MOST_VOTES', limit),
+  ])
 
-  const edges = json.data?.ugcArticleSolutionArticles?.edges ?? []
+  const hotId = String(hotEdges[0]?.node?.uuid ?? hotEdges[0]?.node?.slug ?? '')
+  const deduped = votedEdges.filter(e => String(e.node?.uuid ?? e.node?.slug ?? '') !== hotId)
+  const edges = [...hotEdges, ...deduped].slice(0, limit)
 
   if (edges.length === 0) {
     throw new Error('未找到社区题解，请确认已登录 LeetCode')
