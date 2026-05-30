@@ -8,23 +8,19 @@ export interface ProblemData {
 
 export function extractProblemData(): ProblemData | null {
   // --- Title ---
-  // document.title is typically "2. Add Two Numbers - LeetCode"
-  const titleFromDocTitle = document.title
-    .replace(/\s*[-–|].*$/, '')  // strip " - LeetCode" suffix
-    .trim()
-  // e.g. "2. Add Two Numbers"
+  // Try to find "N. Title" in DOM elements first (most reliable source)
+  const titleWithNumber = extractTitleWithNumber()
 
   const titleFromPage =
     document.querySelector('[data-cy="question-title"]')?.textContent?.trim() ??
     document.querySelector('[data-testid="question-title"]')?.textContent?.trim() ??
     document.querySelector('h1')?.textContent?.trim()
 
-  // Prefer doc title when it starts with a number (has the problem number)
-  // Otherwise fall back to page element title
-  const title = /^\d+\./.test(titleFromDocTitle)
-    ? titleFromDocTitle
-    : (titleFromPage || titleFromDocTitle)
+  // document.title is sometimes "2. Add Two Numbers - LeetCode", sometimes without number
+  const titleFromDocTitle = document.title.replace(/\s*[-–|].*$/, '').trim()
+  const docTitleHasNumber = /^\d+\./.test(titleFromDocTitle)
 
+  const title = titleWithNumber ?? (docTitleHasNumber ? titleFromDocTitle : null) ?? titleFromPage ?? titleFromDocTitle
   if (!title || title === 'LeetCode') return null
 
   // --- Description ---
@@ -62,6 +58,18 @@ export function extractProblemData(): ProblemData | null {
   const difficulty = extractDifficulty()
 
   return { title, description, difficulty }
+}
+
+// Scan DOM for an element whose text looks like "N. Problem Title"
+function extractTitleWithNumber(): string | null {
+  const candidates = document.querySelectorAll('a, span, h1, h2, div')
+  for (const el of candidates) {
+    // Skip elements with many children (they're containers, not leaf text)
+    if ((el as HTMLElement).children.length > 2) continue
+    const text = el.textContent?.trim() ?? ''
+    if (/^\d+\.\s+\w/.test(text) && text.length < 120) return text
+  }
+  return null
 }
 
 function extractDifficulty(): Difficulty | null {
