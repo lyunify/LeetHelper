@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Rounded square background -->
+  <rect width="128" height="128" rx="28" ry="28" fill="#4F46E5"/>
+  <!-- Lightning bolt -->
+  <polygon points="74,12 40,68 62,68 54,116 88,60 66,60" fill="#FBBF24" stroke="#FDE68A" stroke-width="2" stroke-linejoin="round"/>
+</svg>
