@@ -379,10 +379,13 @@ export default function Panel({ title, description }: PanelProps) {
                   <div className="space-y-2">
                     <p className="text-xs text-gray-600 leading-relaxed">{activeSolution.explanation}</p>
                     <CodeBlock code={activeSolution.code} />
-                    <div className="flex gap-3 text-xs text-gray-500">
-                      <span>时间 <strong className="text-gray-700">{activeSolution.timeComplexity}</strong></span>
-                      <span>空间 <strong className="text-gray-700">{activeSolution.spaceComplexity}</strong></span>
-                    </div>
+                    {(activeSolution.timeComplexity || activeSolution.spaceComplexity) && (
+                      <div className="bg-gray-900 rounded-lg px-4 py-3 text-xs space-y-1">
+                        <div className="text-gray-400 font-semibold uppercase tracking-wider text-[10px] mb-2">Complexity</div>
+                        {activeSolution.timeComplexity && <div className="text-gray-300">Time: <span className="text-green-400 font-mono">{activeSolution.timeComplexity}</span></div>}
+                        {activeSolution.spaceComplexity && <div className="text-gray-300">Space: <span className="text-green-400 font-mono">{activeSolution.spaceComplexity}</span></div>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -470,13 +473,7 @@ export default function Panel({ title, description }: PanelProps) {
                           <CodeBlock code={code} />
                         ) : (
                           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
-                            该题解未包含代码块，可能是图文格式
-                          </div>
-                        )}
-                        {(detail?.timeComplexity || detail?.spaceComplexity) && (
-                          <div className="flex gap-3 text-xs text-gray-500">
-                            {detail.timeComplexity && <span>时间 <strong className="text-gray-700">{detail.timeComplexity}</strong></span>}
-                            {detail.spaceComplexity && <span>空间 <strong className="text-gray-700">{detail.spaceComplexity}</strong></span>}
+                            需要 LeetCode Premium 会员才能查看此题解
                           </div>
                         )}
                       </div>
