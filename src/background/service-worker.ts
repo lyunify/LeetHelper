@@ -71,6 +71,15 @@ Requirements:
   }
 }
 
+async function updateBadge() {
+  const result = await chrome.storage.local.get('leet_history')
+  const history = (result['leet_history'] ?? []) as Array<{ timestamp: number }>
+  const todayStart = new Date().setHours(0, 0, 0, 0)
+  const count = history.filter(e => e.timestamp >= todayStart).length
+  chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' })
+  chrome.action.setBadgeBackgroundColor({ color: '#4F46E5' })
+}
+
 chrome.runtime.onMessage.addListener(
   (message: ExtensionMessage, _sender, sendResponse) => {
     if (message.type === 'ANALYZE_PROBLEM') {
@@ -83,3 +92,11 @@ chrome.runtime.onMessage.addListener(
     }
   }
 )
+
+// Update badge whenever storage changes (history updated)
+chrome.storage.onChanged.addListener((changes) => {
+  if ('leet_history' in changes) updateBadge()
+})
+
+// Initialize badge on startup
+updateBadge()

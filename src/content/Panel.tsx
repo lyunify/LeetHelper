@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo, Component } from 'react'
 import hljs from 'highlight.js/lib/core'
 import langPython from 'highlight.js/lib/languages/python'
 import langJava from 'highlight.js/lib/languages/java'
@@ -39,6 +39,60 @@ type SolutionTab = 'optimized' | 'brute'
 interface PanelProps {
   title: string
   description: string
+}
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 space-y-2">
+          <p className="font-semibold">面板出现异常</p>
+          <p className="text-red-500">{(this.state.error as Error).message}</p>
+          <button
+            className="text-indigo-600 underline"
+            onClick={() => this.setState({ error: null })}
+          >
+            重试
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-200 rounded ${className ?? ''}`} />
+}
+
+function LoadingSkeleton({ source }: { source: SolutionSource }) {
+  if (source === 'leetcode') {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-5/6" />
+      <Skeleton className="h-3 w-4/6" />
+      <div className="flex gap-2 pt-1">
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-20 rounded-full" />
+      </div>
+      <Skeleton className="h-36 w-full" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-3/4" />
+    </div>
+  )
 }
 
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
@@ -83,9 +137,10 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   )
 }
 
-export default function Panel({ title, description }: PanelProps) {
+function PanelInner({ title, description }: PanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
   const [lcIndex, setLcIndex] = useState(0)
   const [lcDetail, setLcDetail] = useState<Record<string, { code: string; allCodes: Record<string, string>; timeComplexity: string; spaceComplexity: string } | null>>({})
@@ -113,6 +168,14 @@ export default function Panel({ title, description }: PanelProps) {
   const dragOffset = useRef({ x: 0, y: 0 })
   const isResizing = useRef(false)
   const resizeStart = useRef({ x: 0, y: 0, w: 288, h: 480, px: 0 })
+
+  useEffect(() => {
+    getStorage().then(s => setHasKey(!!s.apiKey))
+    // Refresh when storage changes (e.g. user adds key in popup)
+    const onStorage = () => getStorage().then(s => setHasKey(!!s.apiKey))
+    chrome.storage.onChanged.addListener(onStorage)
+    return () => chrome.storage.onChanged.removeListener(onStorage)
+  }, [])
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
@@ -361,9 +424,17 @@ export default function Panel({ title, description }: PanelProps) {
                 </p>
               )}
 
+              {source === 'ai' && hasKey === false && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1.5">
+                  <p className="font-semibold">⚠️ 未配置 API Key</p>
+                  <p>请点击浏览器右上角的 ⚡ LeetHelper 图标，在设置中填写 Claude API Key 后即可使用。</p>
+                </div>
+              )}
+
               <button
                 onClick={handleAnalyze}
-                className={`w-full text-white py-2 rounded-lg text-sm font-semibold transition-colors ${
+                disabled={source === 'ai' && hasKey === false}
+                className={`w-full text-white py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                   source === 'ai'
                     ? 'bg-indigo-600 hover:bg-indigo-700'
                     : 'bg-orange-500 hover:bg-orange-600'
@@ -374,14 +445,7 @@ export default function Panel({ title, description }: PanelProps) {
             </div>
           )}
 
-          {state === 'loading' && (
-            <div className="text-center py-6 text-gray-500">
-              <div className="text-2xl mb-2 animate-spin inline-block">⟳</div>
-              <p className="text-sm">
-                {source === 'ai' ? '分析中，请稍候...' : '获取社区题解中...'}
-              </p>
-            </div>
-          )}
+          {state === 'loading' && <LoadingSkeleton source={source} />}
 
           {state === 'error' && (
             <div className="space-y-3">
@@ -558,5 +622,13 @@ export default function Panel({ title, description }: PanelProps) {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function Panel(props: PanelProps) {
+  return (
+    <ErrorBoundary>
+      <PanelInner {...props} />
+    </ErrorBoundary>
   )
 }
