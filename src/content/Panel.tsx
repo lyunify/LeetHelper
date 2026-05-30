@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
 import { getStorage } from '../shared/storage'
 import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
@@ -10,6 +10,34 @@ type SolutionTab = 'optimized' | 'brute'
 interface PanelProps {
   title: string
   description: string
+}
+
+function CodeBlock({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [code])
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={copy}
+        style={{ position: 'absolute', top: 6, right: 6, zIndex: 1 }}
+        className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+          copied
+            ? 'bg-green-600 text-white'
+            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+        }`}
+      >
+        {copied ? '✓' : 'copy'}
+      </button>
+      <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
+        {code}
+      </pre>
+    </div>
+  )
 }
 
 export default function Panel({ title, description }: PanelProps) {
@@ -354,9 +382,7 @@ export default function Panel({ title, description }: PanelProps) {
                       <span className="text-gray-700">空间 {activeSolution.spaceComplexity}</span>
                     </div>
                     <p className="text-xs text-gray-600 leading-relaxed">{activeSolution.explanation}</p>
-                    <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
-                      {activeSolution.code}
-                    </pre>
+                    <CodeBlock code={activeSolution.code} />
                   </div>
                 )}
               </div>
@@ -441,9 +467,7 @@ export default function Panel({ title, description }: PanelProps) {
                           </div>
                         )}
                         {code ? (
-                          <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
-                            {code}
-                          </pre>
+                          <CodeBlock code={code} />
                         ) : (
                           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
                             该题解未包含代码块，可能是图文格式
