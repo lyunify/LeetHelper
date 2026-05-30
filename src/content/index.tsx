@@ -28,9 +28,9 @@ function mountPanel() {
   shadow.appendChild(container)
 
   waitForProblemData()
-    .then(({ title, description }) => {
+    .then(({ title, description, difficulty }) => {
       ReactDOM.createRoot(container).render(
-        <Panel title={title} description={description} />
+        <Panel title={title} description={description} difficulty={difficulty} />
       )
     })
     .catch(console.error)

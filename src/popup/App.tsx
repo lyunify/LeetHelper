@@ -4,7 +4,7 @@ import { getStorage, setStorage } from '../shared/storage'
 import { getHistory, clearHistory } from '../shared/history'
 import type { HistoryEntry } from '../shared/history'
 
-type View = 'onboarding' | 'settings' | 'history'
+type View = 'onboarding' | 'settings' | 'history' | 'stats'
 
 function OnboardingView({ onDone }: { onDone: () => void }) {
   const [apiKey, setApiKey] = useState('')
@@ -66,7 +66,7 @@ function OnboardingView({ onDone }: { onDone: () => void }) {
   )
 }
 
-function SettingsView({ onNeedOnboarding, onHistory }: { onNeedOnboarding: () => void; onHistory: () => void }) {
+function SettingsView({ onNeedOnboarding, onHistory, onStats }: { onNeedOnboarding: () => void; onHistory: () => void; onStats: () => void }) {
   const [settings, setSettings] = useState<StorageData>({
     apiProvider: 'claude',
     apiKey: '',
@@ -187,9 +187,99 @@ function SettingsView({ onNeedOnboarding, onHistory }: { onNeedOnboarding: () =>
             配置引导 →
           </button>
         )}
-        <button onClick={onHistory} className="flex-1 text-xs text-gray-400 hover:text-gray-600 py-1">
-          浏览历史 →
+        <button onClick={onStats} className="flex-1 text-xs text-gray-400 hover:text-gray-600 py-1">
+          统计 →
         </button>
+        <button onClick={onHistory} className="flex-1 text-xs text-gray-400 hover:text-gray-600 py-1">
+          历史 →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function StatsView({ onBack }: { onBack: () => void }) {
+  const [entries, setEntries] = useState<HistoryEntry[]>([])
+
+  useEffect(() => { getHistory().then(setEntries) }, [])
+
+  const now = Date.now()
+  const todayStart = new Date().setHours(0, 0, 0, 0)
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+
+  const stats = {
+    total: entries.length,
+    today: entries.filter(e => e.timestamp >= todayStart).length,
+    thisWeek: entries.filter(e => e.timestamp >= weekAgo).length,
+    ai: entries.filter(e => e.source === 'ai').length,
+    lc: entries.filter(e => e.source === 'lc').length,
+  }
+
+  // Last 7 days bar chart data
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now - (6 - i) * 86400000)
+    const start = new Date(d).setHours(0, 0, 0, 0)
+    const end = start + 86400000
+    return {
+      label: d.toLocaleDateString([], { weekday: 'short' }),
+      count: entries.filter(e => e.timestamp >= start && e.timestamp < end).length,
+    }
+  })
+  const maxCount = Math.max(...days.map(d => d.count), 1)
+
+  return (
+    <div className="w-72 font-sans bg-white">
+      <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b border-gray-100">
+        <button onClick={onBack} className="text-xs text-gray-400 hover:text-gray-600">← 返回</button>
+        <h2 className="text-sm font-semibold text-gray-700">刷题统计</h2>
+        <div className="w-8" />
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Summary cards */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: '今日', value: stats.today, color: 'text-indigo-600' },
+            { label: '本周', value: stats.thisWeek, color: 'text-indigo-600' },
+            { label: '总计', value: stats.total, color: 'text-gray-700' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-gray-50 rounded-lg p-2.5 text-center">
+              <div className={`text-xl font-bold ${color}`}>{value}</div>
+              <div className="text-[10px] text-gray-400">{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* AI vs LC breakdown */}
+        <div>
+          <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1.5">来源分布</p>
+          <div className="flex gap-2">
+            <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
+              <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
+              <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
+            </div>
+            <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
+              <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
+              <div className="text-[10px] text-orange-400">🏆 社区题解</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 7-day bar chart */}
+        <div>
+          <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 7 天</p>
+          <div className="flex items-end gap-1 h-16">
+            {days.map(({ label, count }) => (
+              <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className="w-full bg-indigo-400 rounded-sm transition-all"
+                  style={{ height: `${(count / maxCount) * 48}px`, minHeight: count > 0 ? 4 : 0 }}
+                />
+                <span className="text-[9px] text-gray-400">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -253,5 +343,6 @@ export default function App() {
   if (!view) return <div className="w-72 h-32 bg-white" />
   if (view === 'onboarding') return <OnboardingView onDone={() => setView('settings')} />
   if (view === 'history') return <HistoryView onBack={() => setView('settings')} />
-  return <SettingsView onNeedOnboarding={() => setView('onboarding')} onHistory={() => setView('history')} />
+  if (view === 'stats') return <StatsView onBack={() => setView('settings')} />
+  return <SettingsView onNeedOnboarding={() => setView('onboarding')} onHistory={() => setView('history')} onStats={() => setView('stats')} />
 }

@@ -1,39 +1,35 @@
+export type Difficulty = 'Easy' | 'Medium' | 'Hard'
+
 export interface ProblemData {
   title: string
   description: string
+  difficulty: Difficulty | null
 }
 
 export function extractProblemData(): ProblemData | null {
   // --- Title ---
-  // LeetCode changes their DOM frequently. Try multiple selectors.
-  // Most reliable: document.title is always "Problem Name - LeetCode"
   const titleFromPage =
     document.querySelector('[data-cy="question-title"]')?.textContent?.trim() ??
     document.querySelector('[data-testid="question-title"]')?.textContent?.trim() ??
     document.querySelector('h1')?.textContent?.trim()
 
-  // Fallback: parse document.title ("1. Two Sum - LeetCode" → "Two Sum")
   const titleFromDocTitle = document.title
-    .replace(/^\d+\.\s*/, '')   // strip leading "1. "
-    .replace(/\s*[-–|].*$/, '') // strip " - LeetCode" suffix
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\s*[-–|].*$/, '')
     .trim()
 
   const title = titleFromPage || titleFromDocTitle
   if (!title || title === 'LeetCode') return null
 
   // --- Description ---
-  // Try every known LeetCode description container selector
   const descEl =
     document.querySelector('[data-track-load="description_content"]') ??
     document.querySelector('.question-content__JfgR') ??
     document.querySelector('[class*="question-content"]') ??
     document.querySelector('.content__u3I1') ??
-    // 2024-2025 LeetCode structure: description is in a div inside the problem tab
     document.querySelector('div.elfjS') ??
     document.querySelector('div.xFUwe') ??
-    // Broader fallback: find a div with substantial text near the problem area
     (() => {
-      // Look for a div that contains "Example" text — always present in LeetCode problems
       const allDivs = document.querySelectorAll('div')
       for (const div of allDivs) {
         const text = div.textContent ?? ''
@@ -56,7 +52,33 @@ export function extractProblemData(): ProblemData | null {
   const description = descEl.textContent?.trim() ?? ''
   if (!description || description.length < 20) return null
 
-  return { title, description }
+  // --- Difficulty ---
+  const difficulty = extractDifficulty()
+
+  return { title, description, difficulty }
+}
+
+function extractDifficulty(): Difficulty | null {
+  // Try class-based selectors first (LeetCode uses color classes for difficulty)
+  const classSelectors = [
+    '[class*="text-difficulty-easy"]',
+    '[class*="text-difficulty-medium"]',
+    '[class*="text-difficulty-hard"]',
+    '[class*="difficulty"]',
+  ]
+  for (const sel of classSelectors) {
+    const text = document.querySelector(sel)?.textContent?.trim()
+    if (text === 'Easy' || text === 'Medium' || text === 'Hard') return text
+  }
+
+  // Fallback: scan leaf elements for exact difficulty text
+  for (const el of document.querySelectorAll('span, div, p')) {
+    if ((el as HTMLElement).children.length > 0) continue
+    const text = el.textContent?.trim()
+    if (text === 'Easy' || text === 'Medium' || text === 'Hard') return text
+  }
+
+  return null
 }
 
 export function waitForProblemData(timeoutMs = 15000): Promise<ProblemData> {

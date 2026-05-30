@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import Panel from './Panel'
 import type { AnalysisResult } from '../shared/types'
 
@@ -25,6 +25,11 @@ vi.stubGlobal('chrome', {
   storage: {
     local: {
       get: vi.fn(() => Promise.resolve({ codingLanguage: 'java', analysisLanguage: 'zh' })),
+      set: vi.fn(() => Promise.resolve()),
+    },
+    onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
     },
   },
 })
@@ -41,7 +46,10 @@ describe('Panel', () => {
     vi.mocked(chrome.runtime.sendMessage).mockReturnValue(new Promise(() => {}))
     render(<Panel title="Two Sum" description="Given an array..." />)
     fireEvent.click(screen.getByRole('button', { name: /分析题目/ }))
-    expect(await screen.findByText(/分析中/)).toBeInTheDocument()
+    // Loading state shows a skeleton (no button visible)
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /分析题目/ })).not.toBeInTheDocument()
+    )
   })
 
   it('shows error message when API returns error', async () => {
@@ -74,7 +82,8 @@ describe('Panel', () => {
     render(<Panel title="Two Sum" description="Given an array..." />)
     fireEvent.click(screen.getByRole('button', { name: /分析题目/ }))
     await screen.findByText('找两个数使其和等于目标值，返回下标')
-    expect(screen.getByText('O(n)')).toBeInTheDocument()
+    // Optimized solution's code should be visible
+    expect(screen.getByText(/HashMap/)).toBeInTheDocument()
   })
 
   it('switches to brute force tab on click', async () => {

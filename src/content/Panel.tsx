@@ -32,6 +32,7 @@ import { getStorage } from '../shared/storage'
 import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
 import type { LeetCodeSolution } from './leetcode-api'
 import { addHistory } from '../shared/history'
+import type { Difficulty } from './extractor'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
@@ -39,6 +40,7 @@ type SolutionTab = 'optimized' | 'brute'
 interface PanelProps {
   title: string
   description: string
+  difficulty: Difficulty | null
 }
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
@@ -137,7 +139,17 @@ function CodeBlock({ code, lang, fontSize = 'xs' }: { code: string; lang?: strin
   )
 }
 
-function PanelInner({ title, description }: PanelProps) {
+const DIFF_STYLE: Record<Difficulty, string> = {
+  Easy:   'bg-green-100 text-green-700',
+  Medium: 'bg-yellow-100 text-yellow-700',
+  Hard:   'bg-red-100 text-red-700',
+}
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).catch(() => undefined)
+}
+
+function PanelInner({ title, description, difficulty }: PanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [hasKey, setHasKey] = useState<boolean | null>(null)
@@ -236,6 +248,65 @@ function PanelInner({ title, description }: PanelProps) {
       .catch(() => setLcDetail(prev => ({ ...prev, [sol.slug]: null })))
   }, [lcIndex, lcSolutions])
 
+  // Keyboard navigation between LC solutions
+  useEffect(() => {
+    if (state !== 'result' || source !== 'leetcode') return
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'ArrowLeft')  setLcIndex(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setLcIndex(i => Math.min(lcSolutions.length - 1, i + 1))
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [state, source, lcSolutions.length])
+
+  const currentLcSolution = lcSolutions[lcIndex] ?? null
+
+  const activeSolution = result
+    ? tab === 'optimized' ? result.optimized : result.bruteForce
+    : null
+
+  const copyLcAsMarkdown = useCallback(() => {
+    if (!currentLcSolution) return
+    const detail = lcDetail[currentLcSolution.slug]
+    const allCodes = detail?.allCodes ?? {}
+    const langs = Object.keys(allCodes)
+    const selectedLang = lcLang[currentLcSolution.slug] ?? langs[0] ?? ''
+    const code = currentLcSolution.code || (selectedLang ? allCodes[selectedLang] : detail?.code) || ''
+    const lines = [
+      `## ${currentLcSolution.title}`,
+      `*by @${currentLcSolution.author}*`,
+      '',
+      `\`\`\`${(selectedLang || 'text').toLowerCase()}`,
+      code,
+      '```',
+    ]
+    copyToClipboard(lines.join('\n'))
+  }, [currentLcSolution, lcDetail, lcLang])
+
+  const copyAIAsMarkdown = useCallback(() => {
+    if (!result || !activeSolution) return
+    const lines = [
+      `# ${title}`,
+      '',
+      `**解题思路:** ${result.explanation}`,
+      '',
+      `**考点:** ${result.patterns.join(', ')}`,
+      '',
+      `## ${tab === 'optimized' ? '最优解' : '暴力解'}`,
+      '',
+      activeSolution.explanation,
+      '',
+      '```',
+      activeSolution.code,
+      '```',
+      '',
+      activeSolution.timeComplexity ? `**Time:** ${activeSolution.timeComplexity}` : '',
+      activeSolution.spaceComplexity ? `**Space:** ${activeSolution.spaceComplexity}` : '',
+    ].filter(l => l !== undefined)
+    copyToClipboard(lines.join('\n'))
+  }, [result, activeSolution, title, tab])
+
   const handleDragStart = (e: React.MouseEvent) => {
     isDragging.current = true
     dragOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y }
@@ -294,12 +365,6 @@ function PanelInner({ title, description }: PanelProps) {
     setLcDetail({})
     setLcLang({})
   }
-
-  const activeSolution = result
-    ? tab === 'optimized' ? result.optimized : result.bruteForce
-    : null
-
-  const currentLcSolution = lcSolutions[lcIndex] ?? null
 
   // Collapsed: vertical tab pinned to right edge — drag to move up/down, click to expand
   if (collapsed) {
@@ -364,6 +429,11 @@ function PanelInner({ title, description }: PanelProps) {
           {problemNumber && (
             <span className="text-[10px] bg-indigo-500 text-indigo-100 px-1.5 py-0.5 rounded font-medium">
               #{problemNumber}
+            </span>
+          )}
+          {difficulty && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${DIFF_STYLE[difficulty]}`}>
+              {difficulty}
             </span>
           )}
         </div>
@@ -552,13 +622,19 @@ function PanelInner({ title, description }: PanelProps) {
               </div>
 
               <div className="flex items-center justify-between">
-                <button
-                  onClick={handleReset}
-                  className="text-xs text-gray-400 hover:text-gray-600 py-1"
-                >
+                <button onClick={handleReset} className="text-xs text-gray-400 hover:text-gray-600 py-1">
                   重新分析
                 </button>
-                <span className="text-[10px] text-gray-300 italic">AI 生成，仅供参考</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyAIAsMarkdown}
+                    className="text-xs text-indigo-400 hover:text-indigo-600 py-1"
+                    title="复制为 Markdown"
+                  >
+                    📋 MD
+                  </button>
+                  <span className="text-[10px] text-gray-300 italic">AI 生成，仅供参考</span>
+                </div>
               </div>
             </div>
           )}
@@ -668,12 +744,18 @@ function PanelInner({ title, description }: PanelProps) {
                 </>
               )}
 
-              <button
-                onClick={handleReset}
-                className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
-              >
-                返回
-              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={handleReset} className="text-xs text-gray-400 hover:text-gray-600 py-1">
+                  返回
+                </button>
+                <button
+                  onClick={copyLcAsMarkdown}
+                  className="text-xs text-orange-400 hover:text-orange-600 py-1"
+                  title="复制为 Markdown"
+                >
+                  📋 MD
+                </button>
+              </div>
             </div>
           )}
         </div>

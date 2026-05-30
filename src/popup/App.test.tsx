@@ -31,9 +31,9 @@ describe('App (Popup)', () => {
     expect(await screen.findByText(/LeetHelper/)).toBeInTheDocument()
   })
 
-  it('shows "请填写 API Key" when no key is stored', async () => {
+  it('shows onboarding when no key is stored', async () => {
     render(<App />)
-    expect(await screen.findByText(/请填写 API Key/)).toBeInTheDocument()
+    expect(await screen.findByText(/快速开始/)).toBeInTheDocument()
   })
 
   it('shows "已连接" when API key is present', async () => {
@@ -42,7 +42,8 @@ describe('App (Popup)', () => {
     expect(await screen.findByText(/已连接/)).toBeInTheDocument()
   })
 
-  it('saves API key to chrome storage on input change', async () => {
+  it('saves API key to chrome storage on save button click', async () => {
+    mockStore.apiKey = 'sk-ant-existing'
     render(<App />)
     const input = await screen.findByPlaceholderText('sk-ant-...')
     fireEvent.change(input, { target: { value: 'sk-ant-newkey' } })
@@ -52,12 +53,14 @@ describe('App (Popup)', () => {
   })
 
   it('defaults to Java coding language', async () => {
+    mockStore.apiKey = 'sk-ant-test'
     render(<App />)
     const javaButton = await screen.findByRole('button', { name: 'Java' })
     expect(javaButton).toHaveClass('bg-indigo-100')
   })
 
   it('saves coding language when a language button is clicked', async () => {
+    mockStore.apiKey = 'sk-ant-test'
     render(<App />)
     const pythonButton = await screen.findByRole('button', { name: 'Python' })
     fireEvent.click(pythonButton)
