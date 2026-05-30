@@ -3,7 +3,7 @@
   "name": "LeetHelper",
   "version": "0.1.0",
   "description": "AI-powered LeetCode companion for Chinese developers — problem explanation, pattern tags, and clean solutions",
-  "permissions": ["storage"],
+  "permissions": ["storage", "scripting"],
   "host_permissions": [
     "https://leetcode.com/*",
     "https://api.anthropic.com/*"
