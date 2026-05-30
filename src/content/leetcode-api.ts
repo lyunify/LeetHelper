@@ -7,29 +7,43 @@ export interface LeetCodeSolution {
   rawContent: string
 }
 
-const LANG_TAG_MAP: Record<string, string> = {
-  java: 'java',
-  python: 'python3',
-  cpp: 'cpp',
-  javascript: 'javascript',
-}
-
 const SOLUTIONS_QUERY = `
-  query questionSolutions($questionSlug: String!, $skip: Int!, $first: Int!, $languageTags: [String!]!) {
-    questionSolutions(
-      filters: { questionSlug: $questionSlug, languageTags: $languageTags, orderBy: HOT }
+  query ugcArticleSolutionArticles(
+    $questionSlug: String!,
+    $orderBy: ArticleOrderByEnum,
+    $userInput: String,
+    $tagSlugs: [String!],
+    $skip: Int,
+    $first: Int
+  ) {
+    ugcArticleSolutionArticles(
+      questionSlug: $questionSlug
+      orderBy: $orderBy
+      userInput: $userInput
+      tagSlugs: $tagSlugs
       skip: $skip
       first: $first
     ) {
       totalNum
-      solutions {
-        id
-        title
-        post {
-          voteCount
+      edges {
+        node {
+          uuid
+          title
+          slug
+          summary
           content
+          upvoteCount
+          createdAt
           author {
             username
+            profile {
+              userAvatar
+              reputation
+            }
+          }
+          tags {
+            name
+            slug
           }
         }
       }
@@ -69,11 +83,9 @@ function extractCodeFromContent(html: string): string {
 
 export async function fetchTopSolutions(
   titleSlug: string,
-  codingLanguage: string,
+  _codingLanguage: string,
   limit = 5,
 ): Promise<LeetCodeSolution[]> {
-  const langTag = LANG_TAG_MAP[codingLanguage] ?? 'java'
-
   // LeetCode requires the CSRF token as a header for POST requests
   const csrfToken = document.cookie
     .split('; ')
@@ -89,8 +101,16 @@ export async function fetchTopSolutions(
     },
     credentials: 'include',
     body: JSON.stringify({
+      operationName: 'ugcArticleSolutionArticles',
       query: SOLUTIONS_QUERY,
-      variables: { questionSlug: titleSlug, skip: 0, first: limit, languageTags: [langTag] },
+      variables: {
+        questionSlug: titleSlug,
+        skip: 0,
+        first: limit,
+        orderBy: 'HOT',
+        userInput: '',
+        tagSlugs: [],
+      },
     }),
   })
 
@@ -104,18 +124,21 @@ export async function fetchTopSolutions(
     throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
   }
 
-  const rawSolutions = json?.data?.questionSolutions?.solutions ?? []
+  const edges: any[] = json?.data?.ugcArticleSolutionArticles?.edges ?? []
 
-  if (rawSolutions.length === 0) {
-    throw new Error('未找到该语言的社区题解，请尝试切换语言')
+  if (edges.length === 0) {
+    throw new Error('未找到社区题解，请确认已登录 LeetCode')
   }
 
-  return rawSolutions.map((s: any) => ({
-    id: String(s.id),
-    title: s.title ?? '',
-    author: s.post?.author?.username ?? 'anonymous',
-    voteCount: s.post?.voteCount ?? 0,
-    rawContent: s.post?.content ?? '',
-    code: extractCodeFromContent(s.post?.content ?? ''),
-  }))
+  return edges.map((e: any) => {
+    const node = e.node ?? {}
+    return {
+      id: node.uuid ?? node.slug ?? '',
+      title: node.title ?? '',
+      author: node.author?.username ?? 'anonymous',
+      voteCount: node.upvoteCount ?? 0,
+      rawContent: node.content ?? node.summary ?? '',
+      code: extractCodeFromContent(node.content ?? node.summary ?? ''),
+    }
+  })
 }
