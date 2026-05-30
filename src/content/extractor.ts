@@ -8,17 +8,23 @@ export interface ProblemData {
 
 export function extractProblemData(): ProblemData | null {
   // --- Title ---
+  // document.title is typically "2. Add Two Numbers - LeetCode"
+  const titleFromDocTitle = document.title
+    .replace(/\s*[-–|].*$/, '')  // strip " - LeetCode" suffix
+    .trim()
+  // e.g. "2. Add Two Numbers"
+
   const titleFromPage =
     document.querySelector('[data-cy="question-title"]')?.textContent?.trim() ??
     document.querySelector('[data-testid="question-title"]')?.textContent?.trim() ??
     document.querySelector('h1')?.textContent?.trim()
 
-  const titleFromDocTitle = document.title
-    .replace(/^\d+\.\s*/, '')
-    .replace(/\s*[-–|].*$/, '')
-    .trim()
+  // Prefer doc title when it starts with a number (has the problem number)
+  // Otherwise fall back to page element title
+  const title = /^\d+\./.test(titleFromDocTitle)
+    ? titleFromDocTitle
+    : (titleFromPage || titleFromDocTitle)
 
-  const title = titleFromPage || titleFromDocTitle
   if (!title || title === 'LeetCode') return null
 
   // --- Description ---
