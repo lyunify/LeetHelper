@@ -58,9 +58,7 @@ function stripLangPrefix(code: string): string {
 const CODE_KEYWORDS = /\b(class|def|function|return|for|while|if|else|int|void|public|private|var|let|const|import|print|cout|endl|vector|map|set|unordered_map|HashMap|ArrayList|List|Dict|tuple)\b/
 
 function looksLikeCode(text: string): boolean {
-  if (text.length < 40) return false
-  // Must have at least 2 lines
-  if (!text.includes('\n')) return false
+  if (text.length < 20) return false
   // Skip test-case / example blocks
   if (/^(Input|Output|Explanation|Example|Constraints)/.test(text)) return false
   // Must contain at least one programming keyword

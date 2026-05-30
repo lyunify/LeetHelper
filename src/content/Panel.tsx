@@ -601,8 +601,16 @@ function PanelInner({ title, description }: PanelProps) {
                         {code ? (
                           <CodeBlock code={code} lang={selectedLang} />
                         ) : (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
-                            需要 LeetCode Premium 会员才能查看此题解
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center space-y-1.5">
+                            <p>暂无法提取代码块</p>
+                            <a
+                              href={`https://leetcode.com/problems/${getTitleSlug()}/solutions/${currentLcSolution.slug}/`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-indigo-500 hover:text-indigo-700 underline block"
+                            >
+                              在 LeetCode 查看原文 →
+                            </a>
                           </div>
                         )}
                       </div>
