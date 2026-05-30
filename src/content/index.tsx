@@ -45,7 +45,7 @@ mountPanel()
 
 // Alt+L to toggle panel visibility
 document.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.altKey && e.key === 'l') {
+  if (e.altKey && e.code === 'KeyL') {
     const host = document.getElementById('leet-helper-host')
     if (host) host.style.display = host.style.display === 'none' ? '' : 'none'
   }
