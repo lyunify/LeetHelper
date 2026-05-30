@@ -58,7 +58,9 @@ function stripLangPrefix(code: string): string {
 const CODE_KEYWORDS = /\b(class|def|function|return|for|while|if|else|int|void|public|private|var|let|const|import|print|cout|endl|vector|map|set|unordered_map|HashMap|ArrayList|List|Dict|tuple)\b/
 
 function looksLikeCode(text: string): boolean {
-  if (text.length < 20) return false
+  if (text.length < 40) return false
+  // Must have at least 2 lines
+  if (!text.includes('\n')) return false
   // Skip test-case / example blocks
   if (/^(Input|Output|Explanation|Example|Constraints)/.test(text)) return false
   // Must contain at least one programming keyword
@@ -66,31 +68,35 @@ function looksLikeCode(text: string): boolean {
   return true
 }
 
+function bestCode(candidates: string[]): string {
+  // Return the longest candidate (most likely to be the full solution)
+  return candidates.reduce((a, b) => b.length > a.length ? b : a, '')
+}
+
 function extractCodeFromContent(normalized: string): string {
+  const candidates: string[] = []
+
   const parser = new DOMParser()
   const doc = parser.parseFromString(normalized, 'text/html')
 
-  const codeEls = doc.querySelectorAll('pre code')
-  for (const el of codeEls) {
+  for (const el of doc.querySelectorAll('pre code')) {
     const code = stripLangPrefix(el.textContent?.trim() ?? '')
-    if (looksLikeCode(code)) return code
+    if (looksLikeCode(code)) candidates.push(code)
   }
 
-  const preEls = doc.querySelectorAll('pre')
-  for (const el of preEls) {
+  for (const el of doc.querySelectorAll('pre')) {
     const code = stripLangPrefix(el.textContent?.trim() ?? '')
-    if (looksLikeCode(code)) return code
+    if (looksLikeCode(code)) candidates.push(code)
   }
 
-  // Iterate ALL markdown fences — skip example blocks, return first that looks like code
   const fenceRegex = /```[^\n`]*\n([\s\S]*?)```/g
   let m: RegExpExecArray | null
   while ((m = fenceRegex.exec(normalized)) !== null) {
     const code = stripLangPrefix(m[1].trim())
-    if (looksLikeCode(code)) return code
+    if (looksLikeCode(code)) candidates.push(code)
   }
 
-  return ''
+  return candidates.length ? bestCode(candidates) : ''
 }
 
 function extractComplexity(normalized: string): { time: string; space: string } {
