@@ -119,14 +119,32 @@ export function extractAllCodes(normalized: string): Record<string, string> {
   return result
 }
 
-function extractComplexity(normalized: string): { time: string; space: string } {
-  const timeMatch = normalized.match(/[Tt]ime\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/i)
-    ?? normalized.match(/[Tt]ime\s+[Cc]omplexity[^O\n]*?(O\([^)\n]+\))/i)
-  const spaceMatch = normalized.match(/[Ss]pace\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/i)
-    ?? normalized.match(/[Ss]pace\s+[Cc]omplexity[^O\n]*?(O\([^)\n]+\))/i)
+function firstMatch(text: string, patterns: RegExp[]): string {
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m?.[1]) return m[1].trim()
+  }
+  return ''
+}
+
+function extractComplexity(normalized: string): { timeComplexity: string; spaceComplexity: string } {
+  const timePatterns = [
+    /[Tt]ime\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/,
+    /[Tt]ime\s+[Cc]omplexity[^O\n]{0,20}(O\([^)\n]+\))/,
+    /\bT\.?C\.?\s*:?\s*(O\([^)\n]+\))/i,
+    /[Tt]ime\s*:?\s*(O\([^)\n]+\))/,
+    /\*\*[Tt]ime[^*]*\*\*[^O\n]{0,10}(O\([^)\n]+\))/,
+  ]
+  const spacePatterns = [
+    /[Ss]pace\s+[Cc]omplexity\s*:?\s*\*?\*?(O\([^)\n]+\))/,
+    /[Ss]pace\s+[Cc]omplexity[^O\n]{0,20}(O\([^)\n]+\))/,
+    /\bS\.?C\.?\s*:?\s*(O\([^)\n]+\))/i,
+    /[Ss]pace\s*:?\s*(O\([^)\n]+\))/,
+    /\*\*[Ss]pace[^*]*\*\*[^O\n]{0,10}(O\([^)\n]+\))/,
+  ]
   return {
-    time: timeMatch?.[1] ?? '',
-    space: spaceMatch?.[1] ?? '',
+    timeComplexity: firstMatch(normalized, timePatterns),
+    spaceComplexity: firstMatch(normalized, spacePatterns),
   }
 }
 
