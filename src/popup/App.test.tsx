@@ -5,6 +5,7 @@ import App from './App'
 const mockStore: Record<string, unknown> = {}
 
 vi.stubGlobal('chrome', {
+  runtime: { id: 'test-extension-id' },
   storage: {
     local: {
       get: vi.fn((keys: string[]) => {

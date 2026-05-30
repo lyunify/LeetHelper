@@ -193,10 +193,11 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
 
   useEffect(() => {
     getStorage().then(s => setHasKey(!!s.apiKey))
-    // Refresh when storage changes (e.g. user adds key in popup)
     const onStorage = () => getStorage().then(s => setHasKey(!!s.apiKey))
-    chrome.storage.onChanged.addListener(onStorage)
-    return () => chrome.storage.onChanged.removeListener(onStorage)
+    try {
+      chrome.storage.onChanged.addListener(onStorage)
+      return () => { try { chrome.storage.onChanged.removeListener(onStorage) } catch { /* context gone */ } }
+    } catch { /* context already gone on mount */ }
   }, [])
 
   useEffect(() => {

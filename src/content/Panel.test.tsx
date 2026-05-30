@@ -21,7 +21,7 @@ const mockResult: AnalysisResult = {
 }
 
 vi.stubGlobal('chrome', {
-  runtime: { sendMessage: vi.fn() },
+  runtime: { id: 'test-extension-id', sendMessage: vi.fn() },
   tabs: { create: vi.fn() },
   storage: {
     local: {
