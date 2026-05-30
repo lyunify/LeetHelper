@@ -3,7 +3,7 @@
   "name": "LeetHelper",
   "version": "0.1.0",
   "description": "AI-powered LeetCode companion for Chinese developers — problem explanation, pattern tags, and clean solutions",
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://leetcode.com/*",
     "https://api.anthropic.com/*"
@@ -25,6 +25,12 @@
       "matches": ["https://leetcode.com/problems/*"],
       "js": ["src/content/index.tsx"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://leetcode.com/problems/*"],
+      "js": ["src/content/main-world-fetcher.ts"],
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ],
   "icons": {

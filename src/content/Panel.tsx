@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { AnalysisResult, ExtensionMessage, LeetCodeSolutionRaw, SolutionSource } from '../shared/types'
+import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
 import { getStorage } from '../shared/storage'
-import { getTitleSlug } from './leetcode-api'
+import { fetchTopSolutions, getTitleSlug } from './leetcode-api'
+import type { LeetCodeSolution } from './leetcode-api'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
@@ -14,7 +15,7 @@ interface PanelProps {
 export default function Panel({ title, description }: PanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [lcSolutions, setLcSolutions] = useState<LeetCodeSolutionRaw[]>([])
+  const [lcSolutions, setLcSolutions] = useState<LeetCodeSolution[]>([])
   const [lcIndex, setLcIndex] = useState(0)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<SolutionTab>('optimized')
@@ -75,20 +76,11 @@ export default function Panel({ title, description }: PanelProps) {
     try {
       const titleSlug = getTitleSlug()
       if (!titleSlug) throw new Error('无法识别题目链接，请确认在题目页面')
-
-      const response = await chrome.runtime.sendMessage({
-        type: 'FETCH_LEETCODE_SOLUTIONS',
-        payload: { titleSlug, limit: 5 },
-      } satisfies ExtensionMessage) as ExtensionMessage
-
-      if (response.type === 'LEETCODE_SOLUTIONS_RESULT') {
-        setLcSolutions(response.payload)
-        setLcIndex(0)
-        setState('result')
-      } else if (response.type === 'ANALYSIS_ERROR') {
-        setError(response.payload.message)
-        setState('error')
-      }
+      const { codingLanguage } = await getStorage()
+      const solutions = await fetchTopSolutions(titleSlug, codingLanguage, 5)
+      setLcSolutions(solutions)
+      setLcIndex(0)
+      setState('result')
     } catch (e) {
       setError(e instanceof Error ? e.message : '获取社区题解失败，请确认已登录 LeetCode')
       setState('error')

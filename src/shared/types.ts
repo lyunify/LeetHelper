@@ -32,23 +32,7 @@ export interface AnalysisRequest {
 
 export type SolutionSource = 'ai' | 'leetcode'
 
-export interface FetchSolutionsRequest {
-  titleSlug: string
-  limit: number
-}
-
-export interface LeetCodeSolutionRaw {
-  id: string
-  title: string
-  author: string
-  voteCount: number
-  code: string
-  rawContent: string
-}
-
 export type ExtensionMessage =
   | { type: 'ANALYZE_PROBLEM'; payload: AnalysisRequest }
   | { type: 'ANALYSIS_RESULT'; payload: AnalysisResult }
   | { type: 'ANALYSIS_ERROR'; payload: { message: string } }
-  | { type: 'FETCH_LEETCODE_SOLUTIONS'; payload: FetchSolutionsRequest }
-  | { type: 'LEETCODE_SOLUTIONS_RESULT'; payload: LeetCodeSolutionRaw[] }
