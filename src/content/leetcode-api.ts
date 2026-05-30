@@ -31,7 +31,6 @@ const SOLUTIONS_QUERY = `
           title
           slug
           summary
-          content
           hitCount
           author {
             userSlug
@@ -143,7 +142,7 @@ export async function fetchTopSolutions(
 
   return edges.map(e => {
     const node = e.node ?? {}
-    const content = String(node.content ?? node.summary ?? '')
+    const content = String(node.summary ?? '')
     return {
       id: String(node.uuid ?? node.slug ?? ''),
       title: String(node.title ?? ''),
