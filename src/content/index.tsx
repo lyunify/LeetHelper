@@ -35,12 +35,22 @@ function mountPanel() {
     .catch(console.error)
 }
 
+function getProblemSlug(): string | null {
+  const match = location.href.match(/\/problems\/([^/]+)/)
+  return match?.[1] ?? null
+}
+
 mountPanel()
 
 let lastUrl = location.href
+let lastSlug = getProblemSlug()
 new MutationObserver(() => {
   if (location.href !== lastUrl) {
     lastUrl = location.href
-    mountPanel()
+    const newSlug = getProblemSlug()
+    if (newSlug !== lastSlug) {
+      lastSlug = newSlug
+      mountPanel()
+    }
   }
 }).observe(document, { subtree: true, childList: true })
