@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
     "@crxjs/vite-plugin": "^2.0.0-beta.33",
+    "highlight.js": "^11.11.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

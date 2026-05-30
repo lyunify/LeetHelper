@@ -192,7 +192,14 @@ const SOLUTION_DETAIL_QUERY = `
   }
 `
 
-export async function fetchSolutionContent(slug: string): Promise<{ code: string; allCodes: Record<string, string>; timeComplexity: string; spaceComplexity: string }> {
+import { getCached, setCached } from './solution-cache'
+
+type SolutionDetail = { code: string; allCodes: Record<string, string>; timeComplexity: string; spaceComplexity: string }
+
+export async function fetchSolutionContent(slug: string): Promise<SolutionDetail> {
+  const cached = await getCached<SolutionDetail>(slug)
+  if (cached) return cached
+
   const json = await fetchViaMainWorld({
     operationName: 'ugcArticleSolutionArticle',
     query: SOLUTION_DETAIL_QUERY,
@@ -212,11 +219,13 @@ export async function fetchSolutionContent(slug: string): Promise<{ code: string
   const langs = Object.keys(allCodes)
   // Pick best single code: longest block
   const code = langs.length ? langs.reduce((a, b) => allCodes[b].length > allCodes[a].length ? b : a, langs[0]) : ''
-  return {
+  const result: SolutionDetail = {
     code: code ? allCodes[code] : '',
     allCodes,
     ...extractComplexity(normalized),
   }
+  await setCached(slug, result)
+  return result
 }
 
 async function fetchSolutionList(

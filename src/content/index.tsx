@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import Panel from './Panel'
 import panelCSS from './panel.css?inline'
+import hljsCSS from 'highlight.js/styles/github-dark.css?inline'
 import { waitForProblemData } from './extractor'
 
 function isProblemPage() {
@@ -20,7 +21,7 @@ function mountPanel() {
   const shadow = host.attachShadow({ mode: 'open' })
 
   const style = document.createElement('style')
-  style.textContent = panelCSS
+  style.textContent = panelCSS + '\n' + hljsCSS
   shadow.appendChild(style)
 
   const container = document.createElement('div')
@@ -41,6 +42,14 @@ function getProblemSlug(): string | null {
 }
 
 mountPanel()
+
+// Alt+L to toggle panel visibility
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.altKey && e.key === 'l') {
+    const host = document.getElementById('leet-helper-host')
+    if (host) host.style.display = host.style.display === 'none' ? '' : 'none'
+  }
+})
 
 let lastUrl = location.href
 let lastSlug = getProblemSlug()

@@ -1,8 +1,37 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import hljs from 'highlight.js/lib/core'
+import langPython from 'highlight.js/lib/languages/python'
+import langJava from 'highlight.js/lib/languages/java'
+import langJs from 'highlight.js/lib/languages/javascript'
+import langTs from 'highlight.js/lib/languages/typescript'
+import langCpp from 'highlight.js/lib/languages/cpp'
+import langGo from 'highlight.js/lib/languages/go'
+import langRust from 'highlight.js/lib/languages/rust'
+import langCs from 'highlight.js/lib/languages/csharp'
+import langKotlin from 'highlight.js/lib/languages/kotlin'
+import langSwift from 'highlight.js/lib/languages/swift'
+
+hljs.registerLanguage('python', langPython)
+hljs.registerLanguage('java', langJava)
+hljs.registerLanguage('javascript', langJs)
+hljs.registerLanguage('typescript', langTs)
+hljs.registerLanguage('cpp', langCpp)
+hljs.registerLanguage('go', langGo)
+hljs.registerLanguage('rust', langRust)
+hljs.registerLanguage('csharp', langCs)
+hljs.registerLanguage('kotlin', langKotlin)
+hljs.registerLanguage('swift', langSwift)
+
+const LANG_TO_HLJS: Record<string, string> = {
+  Python: 'python', Java: 'java', JavaScript: 'javascript',
+  TypeScript: 'typescript', 'C++': 'cpp', Go: 'go',
+  Rust: 'rust', 'C#': 'csharp', Kotlin: 'kotlin', Swift: 'swift',
+}
 import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
 import { getStorage } from '../shared/storage'
 import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
 import type { LeetCodeSolution } from './leetcode-api'
+import { addHistory } from '../shared/history'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
@@ -12,7 +41,7 @@ interface PanelProps {
   description: string
 }
 
-function CodeBlock({ code }: { code: string }) {
+function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false)
   const copy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -20,6 +49,17 @@ function CodeBlock({ code }: { code: string }) {
       setTimeout(() => setCopied(false), 1500)
     })
   }, [code])
+
+  const highlighted = useMemo(() => {
+    const hljsLang = lang ? LANG_TO_HLJS[lang] : undefined
+    try {
+      if (hljsLang) return hljs.highlight(code, { language: hljsLang }).value
+      return hljs.highlightAuto(code, Object.values(LANG_TO_HLJS)).value
+    } catch {
+      return null
+    }
+  }, [code, lang])
+
   return (
     <div style={{ position: 'relative' }}>
       <button
@@ -33,8 +73,11 @@ function CodeBlock({ code }: { code: string }) {
       >
         {copied ? '✓' : 'copy'}
       </button>
-      <pre className="bg-gray-900 text-gray-100 text-xs p-2 rounded-lg overflow-x-auto leading-relaxed">
-        {code}
+      <pre className="hljs bg-gray-900 text-xs p-4 rounded-lg overflow-x-auto leading-relaxed" style={{ margin: 0 }}>
+        {highlighted
+          ? <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+          : <code>{code}</code>
+        }
       </pre>
     </div>
   )
@@ -52,8 +95,20 @@ export default function Panel({ title, description }: PanelProps) {
   const [source, setSource] = useState<SolutionSource>('ai')
   const [collapsed, setCollapsed] = useState(false)
 
-  const [position, setPosition] = useState({ x: window.innerWidth - 308, y: 80 })
-  const [size, setSize] = useState({ w: 288, h: 480 })
+  const [position, setPosition] = useState(() => {
+    try {
+      const saved = localStorage.getItem('leet-helper-pos')
+      if (saved) return JSON.parse(saved) as { x: number; y: number }
+    } catch { /* ignore */ }
+    return { x: window.innerWidth - 308, y: 80 }
+  })
+  const [size, setSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem('leet-helper-size')
+      if (saved) return JSON.parse(saved) as { w: number; h: number }
+    } catch { /* ignore */ }
+    return { w: 288, h: 480 }
+  })
   const isDragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
   const isResizing = useRef(false)
@@ -82,13 +137,21 @@ export default function Panel({ title, description }: PanelProps) {
       isDragging.current = false
       isResizing.current = false
     }
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
     return () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
     }
   }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem('leet-helper-pos', JSON.stringify(position)) } catch { /* ignore */ }
+  }, [position])
+
+  useEffect(() => {
+    try { localStorage.setItem('leet-helper-size', JSON.stringify(size)) } catch { /* ignore */ }
+  }, [size])
 
   useEffect(() => {
     const sol = lcSolutions[lcIndex]
@@ -117,6 +180,7 @@ export default function Panel({ title, description }: PanelProps) {
       if (response.type === 'ANALYSIS_RESULT') {
         setResult(response.payload)
         setState('result')
+        addHistory({ slug: getTitleSlug() ?? title, title, source: 'ai' })
       } else if (response.type === 'ANALYSIS_ERROR') {
         setError(response.payload.message)
         setState('error')
@@ -137,6 +201,7 @@ export default function Panel({ title, description }: PanelProps) {
       setLcSolutions(solutions)
       setLcIndex(0)
       setState('result')
+      addHistory({ slug: titleSlug, title, source: 'lc' })
     } catch (e) {
       setError(e instanceof Error ? e.message : '获取社区题解失败，请确认已登录 LeetCode')
       setState('error')
@@ -470,7 +535,7 @@ export default function Panel({ title, description }: PanelProps) {
                           </div>
                         )}
                         {code ? (
-                          <CodeBlock code={code} />
+                          <CodeBlock code={code} lang={selectedLang} />
                         ) : (
                           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 text-center">
                             需要 LeetCode Premium 会员才能查看此题解
