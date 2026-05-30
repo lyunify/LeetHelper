@@ -48,24 +48,40 @@ export function getTitleSlug(): string | null {
   return match?.[1] ?? null
 }
 
+function decodeCode(raw: string): string {
+  // LeetCode stores newlines as literal \n in code blocks — decode them
+  let code = raw.includes('\n') ? raw : raw.replace(/\\n/g, '\n')
+  // Strip language prefix lines like "cpp []", "++ []", "python3 []"
+  code = code.replace(/^[^\n]{0,30}\[\]\s*\n/, '')
+  return code.trim()
+}
+
+function looksLikeCode(text: string): boolean {
+  if (text.length < 20) return false
+  // Skip test-case blocks
+  if (/^(Input|Output|Explanation|Example|Constraints)/.test(text)) return false
+  return true
+}
+
 function extractCodeFromContent(html: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
   const codeEls = doc.querySelectorAll('pre code')
   for (const el of codeEls) {
-    const code = el.textContent?.trim() ?? ''
-    if (code.length > 20) return code
+    const code = decodeCode(el.textContent?.trim() ?? '')
+    if (looksLikeCode(code)) return code
   }
 
   const preEls = doc.querySelectorAll('pre')
   for (const el of preEls) {
-    const code = el.textContent?.trim() ?? ''
-    if (code.length > 20) return code
+    const code = decodeCode(el.textContent?.trim() ?? '')
+    if (looksLikeCode(code)) return code
   }
 
-  const fenceMatch = html.match(/```[\w]*\n?([\s\S]*?)```/)
-  if (fenceMatch?.[1]?.trim()) return fenceMatch[1].trim()
+  // Markdown fences — capture everything after the opening fence line
+  const fenceMatch = html.match(/```[^\n`]*\n([\s\S]*?)```/)
+  if (fenceMatch?.[1]?.trim()) return decodeCode(fenceMatch[1].trim())
 
   return ''
 }
