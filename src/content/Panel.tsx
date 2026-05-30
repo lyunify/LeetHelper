@@ -33,7 +33,7 @@ import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcod
 import type { LeetCodeSolution } from './leetcode-api'
 import { addHistory, getHistory, clearHistory, calcStreak } from '../shared/history'
 import type { HistoryEntry } from '../shared/history'
-import { getCachedAnalysis, setCachedAnalysis } from '../shared/ai-cache'
+import { getCachedAnalysis, setCachedAnalysis, getCachedLCSolutions, setCachedLCSolutions } from '../shared/ai-cache'
 import { getProblemMeta, setProblemMeta } from '../shared/problem-meta'
 import type { ProblemStatus } from '../shared/problem-meta'
 import type { Difficulty } from './extractor'
@@ -211,6 +211,30 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
     const slug = getTitleSlug()
     if (!slug) return
     getProblemMeta(slug).then(m => { setProblemStatus(m.status); setNotes(m.notes) })
+  }, [])
+
+  // Restore cached analysis on mount
+  useEffect(() => {
+    const slug = getTitleSlug()
+    if (!slug) return
+    getStorage().then(async ({ codingLanguage }) => {
+      const cachedAI = await getCachedAnalysis(slug, codingLanguage)
+      if (cachedAI) {
+        setResult(cachedAI)
+        setState('result')
+        setSource('ai')
+        setPanelTab('ai')
+        return
+      }
+      const cachedLC = await getCachedLCSolutions(slug, codingLanguage)
+      if (cachedLC && cachedLC.length > 0) {
+        setLcSolutions(cachedLC)
+        setLcIndex(0)
+        setState('result')
+        setSource('leetcode')
+        setPanelTab('leetcode')
+      }
+    })
   }, [])
 
   // Auto-detect LeetCode editor language and sync to storage
@@ -430,6 +454,7 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
       setLcIndex(0)
       setState('result')
       addHistory({ slug: titleSlug, title, source: 'lc' })
+      setCachedLCSolutions(titleSlug, codingLanguage, solutions)
     } catch (e) {
       setError(e instanceof Error ? e.message : '获取社区题解失败，请确认已登录 LeetCode')
       setState('error')
@@ -746,7 +771,22 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
                     <li
                       key={e.slug + e.timestamp}
                       className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => chrome.tabs.create({ url: `https://leetcode.com/problems/${e.slug}/` })}
+                      onClick={async () => {
+                        const currentSlug = getTitleSlug()
+                        if (e.slug === currentSlug) {
+                          // Same problem — restore from cache
+                          const { codingLanguage } = await getStorage()
+                          if (e.source === 'ai') {
+                            const cached = await getCachedAnalysis(e.slug, codingLanguage)
+                            if (cached) { setResult(cached); setState('result'); setSource('ai'); switchTab('ai') }
+                          } else {
+                            const cached = await getCachedLCSolutions(e.slug, codingLanguage)
+                            if (cached?.length) { setLcSolutions(cached); setLcIndex(0); setState('result'); setSource('leetcode'); switchTab('leetcode') }
+                          }
+                        } else {
+                          chrome.tabs.create({ url: `https://leetcode.com/problems/${e.slug}/` })
+                        }
+                      }}
                     >
                       <span className={`text-[9px] px-1 py-0.5 rounded font-bold shrink-0 ${e.source === 'ai' ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600'}`}>
                         {e.source === 'ai' ? 'AI' : 'LC'}
