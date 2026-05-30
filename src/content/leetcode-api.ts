@@ -246,7 +246,7 @@ export async function fetchTopSolutions(
       author: String((node.author as Record<string, unknown>)?.userName ?? (node.author as Record<string, unknown>)?.userSlug ?? 'anonymous'),
       voteCount: Number(node.hitCount ?? 0),
       rawContent: content,
-      code: extractCodeFromContent(content),
+      code: '',
       timeComplexity: '',
       spaceComplexity: '',
     }
