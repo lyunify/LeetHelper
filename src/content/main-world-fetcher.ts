@@ -29,13 +29,18 @@ window.addEventListener('message', async (event: MessageEvent) => {
       body,
     })
 
-    const data = await response.json()
+    const text = await response.text()
+    let data: unknown
+    try { data = JSON.parse(text) } catch { data = text }
+
     window.postMessage({
       type: 'LEET_FETCH_RESPONSE',
       id,
       ok: response.ok,
       status: response.status,
       data,
+      // On error, expose the raw body so we can debug
+      error: response.ok ? undefined : String(text).substring(0, 300),
     }, window.location.origin)
   } catch (e: unknown) {
     window.postMessage({

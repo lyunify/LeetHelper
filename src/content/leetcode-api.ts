@@ -32,9 +32,10 @@ const SOLUTIONS_QUERY = `
           slug
           summary
           content
-          upvoteCount
+          hitCount
           author {
-            username
+            userSlug
+            userName
           }
         }
       }
@@ -146,8 +147,8 @@ export async function fetchTopSolutions(
     return {
       id: String(node.uuid ?? node.slug ?? ''),
       title: String(node.title ?? ''),
-      author: String((node.author as Record<string, unknown>)?.username ?? 'anonymous'),
-      voteCount: Number(node.upvoteCount ?? 0),
+      author: String((node.author as Record<string, unknown>)?.userName ?? (node.author as Record<string, unknown>)?.userSlug ?? 'anonymous'),
+      voteCount: Number(node.hitCount ?? 0),
       rawContent: content,
       code: extractCodeFromContent(content),
     }
