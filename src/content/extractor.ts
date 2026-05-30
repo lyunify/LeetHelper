@@ -95,6 +95,30 @@ function extractDifficulty(): Difficulty | null {
   return null
 }
 
+export function extractTopicTags(): string[] {
+  // LeetCode renders topic tags as links to /tag/ pages
+  const tagLinks = document.querySelectorAll('a[href*="/tag/"]')
+  if (tagLinks.length > 0) {
+    const tags = Array.from(tagLinks)
+      .map(el => el.textContent?.trim() ?? '')
+      .filter(t => t.length > 0 && t.length < 50)
+    if (tags.length > 0) return [...new Set(tags)]
+  }
+
+  // Fallback: class-based selectors LeetCode has used across UI versions
+  for (const sel of ['[class*="topic-tag"]', '[class*="topicTag"]', '[data-topic-slug]']) {
+    const els = document.querySelectorAll(sel)
+    if (els.length > 0) {
+      const tags = Array.from(els)
+        .map(el => el.textContent?.trim() ?? '')
+        .filter(t => t.length > 0 && t.length < 50)
+      if (tags.length > 0) return [...new Set(tags)]
+    }
+  }
+
+  return []
+}
+
 export function waitForProblemData(timeoutMs = 15000): Promise<ProblemData> {
   return new Promise((resolve, reject) => {
     const check = () => {

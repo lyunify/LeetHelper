@@ -37,6 +37,7 @@ import { getCachedAnalysis, setCachedAnalysis, getCachedLCSolutions, setCachedLC
 import { getProblemMeta, setProblemMeta } from '../shared/problem-meta'
 import type { ProblemStatus } from '../shared/problem-meta'
 import type { Difficulty } from './extractor'
+import { extractTopicTags } from './extractor'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
 type SolutionTab = 'optimized' | 'brute'
@@ -172,7 +173,19 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [codeSize, setCodeSize] = useState<'xs' | 'sm'>('xs')
+  const [topicTags, setTopicTags] = useState<string[]>([])
+  const [timerOpen, setTimerOpen] = useState(false)
+  const [timerRunning, setTimerRunning] = useState(false)
+  const [timerSeconds, setTimerSeconds] = useState(25 * 60)
+  const [timerMode, setTimerModeState] = useState<'work' | 'break'>('work')
+  const timerModeRef = useRef<'work' | 'break'>('work')
+  const timerIntervalRef = useRef<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  function setTimerMode(m: 'work' | 'break') {
+    timerModeRef.current = m
+    setTimerModeState(m)
+  }
 
   // Parse problem number from title (e.g. "8. String to Integer (atoi)")
   const problemNumber = title.match(/^(\d+)\./)?.[1] ?? null
@@ -235,6 +248,18 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
         setPanelTab('leetcode')
       }
     })
+  }, [])
+
+  // Extract official topic tags from DOM (they load after the problem content)
+  useEffect(() => {
+    const try1 = window.setTimeout(() => {
+      const tags = extractTopicTags()
+      if (tags.length > 0) { setTopicTags(tags); return }
+      // Tags sometimes load later — retry once
+      const try2 = window.setTimeout(() => setTopicTags(extractTopicTags()), 2000)
+      return () => clearTimeout(try2)
+    }, 1500)
+    return () => clearTimeout(try1)
   }, [])
 
   // Auto-detect LeetCode editor language and sync to storage
@@ -318,12 +343,40 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
     return () => window.removeEventListener('keydown', handler)
   }, [state, source, lcSolutions.length])
 
+  // Pomodoro timer countdown
+  useEffect(() => {
+    if (!timerRunning) {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
+      return
+    }
+    timerIntervalRef.current = window.setInterval(() => {
+      setTimerSeconds(s => {
+        if (s <= 1) {
+          const nextMode = timerModeRef.current === 'work' ? 'break' : 'work'
+          setTimerMode(nextMode)
+          setTimerRunning(false)
+          return nextMode === 'break' ? 5 * 60 : 25 * 60
+        }
+        return s - 1
+      })
+    }, 1000)
+    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current) }
+  }, [timerRunning])
+
   // Load history when switching to stats or history tab
   useEffect(() => {
     if (panelTab === 'stats' || panelTab === 'history') {
       getHistory().then(setHistoryEntries)
     }
   }, [panelTab])
+
+  const timerMins = String(Math.floor(timerSeconds / 60)).padStart(2, '0')
+  const timerSecs = String(timerSeconds % 60).padStart(2, '0')
+
+  function toggleSide() {
+    const isRight = position.x > window.innerWidth / 2
+    setPosition(p => ({ ...p, x: isRight ? 8 : window.innerWidth - size.w - 8 }))
+  }
 
   function switchTab(tab: PanelTab) {
     setPanelTab(tab)
@@ -507,16 +560,10 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
         title="拖动调整位置，点击展开"
       >
         <div
-          className="text-white px-1.5 py-4 rounded-l-lg text-xs font-bold shadow-lg hover:opacity-90 transition-opacity select-none flex flex-col items-center gap-2"
-          style={{ background: '#4F46E5', writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          className="text-white rounded-l-lg shadow-lg select-none py-3 px-1.5"
+          style={{ background: '#4F46E5', writingMode: 'vertical-lr' }}
         >
-          <span>▶</span>
-          {difficulty && (
-            <span style={{ background: diffColor, borderRadius: 3, padding: '2px 4px', fontSize: 9, color: 'white' }}>
-              {difficulty[0]}
-            </span>
-          )}
-          {problemNumber && <span style={{ fontSize: 10, opacity: 0.8 }}>#{problemNumber}</span>}
+          <span className="text-sm font-bold tracking-wide">⚡ LeetHelper</span>
         </div>
       </div>
     )
@@ -552,7 +599,6 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
             {problemNumber ? `#${problemNumber} ${problemTitle}` : problemTitle}
           </span>
           <div className="flex items-center gap-0.5 shrink-0" onMouseDown={e => e.stopPropagation()}>
-            <button onClick={copyProblemUrl} className="text-indigo-300 hover:text-white text-[10px] px-1 py-0.5 rounded" title="复制题目链接">🔗</button>
             <button
               onClick={() => setCodeSize('xs')}
               className={`text-[10px] px-1 py-0.5 rounded transition-colors ${codeSize === 'xs' ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
@@ -563,6 +609,16 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
               className={`text-xs px-1 py-0.5 rounded transition-colors ${codeSize === 'sm' ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
               title="大字体"
             >A</button>
+            <button
+              onClick={() => setTimerOpen(o => !o)}
+              className={`text-base px-1.5 py-0.5 rounded transition-colors leading-none ${timerOpen ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
+              title="番茄钟"
+            >⏱</button>
+            <button
+              onClick={toggleSide}
+              className="text-indigo-300 hover:text-white text-[10px] px-1 py-0.5 rounded"
+              title="切换左右侧"
+            >⇄</button>
           </div>
           <button
             onMouseDown={e => e.stopPropagation()}
@@ -609,9 +665,9 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
           {/* Always-visible 4-tab bar */}
           <div className="flex gap-0.5 p-1 bg-gray-100 rounded-lg mb-3">
             {([
-              ['ai', '✨ AI', 'text-indigo-700'],
-              ['leetcode', '🏆 社区', 'text-orange-600'],
-              ['stats', '📊 统计', 'text-gray-700'],
+              ['ai', '✨ AI分析', 'text-indigo-700'],
+              ['leetcode', '🏆 社区题解', 'text-orange-600'],
+              ['stats', '🏅 战绩', 'text-gray-700'],
               ['history', '🕐 历史', 'text-gray-700'],
             ] as [PanelTab, string, string][]).map(([t, label, activeColor]) => (
               <button
@@ -628,26 +684,57 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
             ))}
           </div>
 
+          {/* Pomodoro timer */}
+          {timerOpen && (
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg mb-2 text-xs ${timerMode === 'work' ? 'bg-indigo-50 border border-indigo-100' : 'bg-green-50 border border-green-100'}`}>
+              <div>
+                <span className={`font-semibold text-[10px] uppercase ${timerMode === 'work' ? 'text-indigo-400' : 'text-green-400'}`}>
+                  {timerMode === 'work' ? '专注' : '休息'}
+                </span>
+                <div className={`text-2xl font-mono font-bold tabular-nums leading-none ${timerMode === 'work' ? 'text-indigo-700' : 'text-green-700'}`}>
+                  {timerMins}:{timerSecs}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 items-end">
+                <button
+                  onClick={() => setTimerRunning(r => !r)}
+                  className={`text-xs px-3 py-1 rounded font-medium transition-colors ${
+                    timerRunning
+                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : timerMode === 'work'
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {timerRunning ? '暂停' : '开始'}
+                </button>
+                <button
+                  onClick={() => { setTimerRunning(false); setTimerMode('work'); setTimerSeconds(25 * 60) }}
+                  className="text-[10px] text-gray-400 hover:text-gray-600"
+                >
+                  重置
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Problem status + notes — always visible on AI/LC tabs */}
           {(panelTab === 'ai' || panelTab === 'leetcode') && (
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex gap-1">
-                {([['solved','✅','已解','bg-green-100 text-green-700 border-green-300'],['attempted','🔄','尝试','bg-yellow-100 text-yellow-700 border-yellow-300'],['todo','📌','待做','bg-blue-100 text-blue-700 border-blue-300']] as [ProblemStatus, string, string, string][]).map(([s, icon, label, activeStyle]) => (
-                  <button
-                    key={s}
-                    onClick={() => updateStatus(s)}
-                    className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors ${problemStatus === s ? activeStyle : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
-                  >
-                    {icon} {label}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center justify-center gap-1.5 mb-2">
+              {([['solved','已解','bg-green-100 text-green-700 border-green-300'],['attempted','尝试','bg-yellow-100 text-yellow-700 border-yellow-300'],['todo','待做','bg-blue-100 text-blue-700 border-blue-300']] as [ProblemStatus, string, string][]).map(([s, label, activeStyle]) => (
+                <button
+                  key={s}
+                  onClick={() => updateStatus(s)}
+                  className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${problemStatus === s ? activeStyle : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                >
+                  {label}
+                </button>
+              ))}
               <button
                 onClick={() => setNotesOpen(o => !o)}
-                className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${notes ? 'border-indigo-300 text-indigo-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
-                title="笔记"
+                className={`text-[10px] px-2.5 py-1 rounded border font-medium transition-colors ${notes ? 'border-indigo-300 text-indigo-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
               >
-                📝{notes ? ' •' : ''}
+                笔记{notes ? ' •' : ''}
               </button>
             </div>
           )}
@@ -810,6 +897,16 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
           {/* AI / LC tabs - main analysis content */}
           {(panelTab === 'ai' || panelTab === 'leetcode') && (
           <div>
+          {state === 'idle' && topicTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {topicTags.map(tag => (
+                <span key={tag} className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full border border-gray-200">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           {state === 'idle' && (
             <div className="space-y-2">
               {source === 'leetcode' && (
@@ -872,7 +969,18 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
                       {p}
                     </span>
                   ))}
+                  {topicTags.map(tag => (
+                    <span key={tag} className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full border border-gray-200">
+                      {tag}
+                    </span>
+                  ))}
                 </div>
+                {topicTags.length > 0 && (
+                  <p className="text-[10px] text-gray-300 mt-1">
+                    <span className="text-indigo-300">■</span> AI识别 &nbsp;
+                    <span className="text-gray-300">■</span> 官方标签
+                  </p>
+                )}
               </div>
 
               <div>
