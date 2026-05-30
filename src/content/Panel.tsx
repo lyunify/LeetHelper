@@ -377,12 +377,12 @@ export default function Panel({ title, description }: PanelProps) {
 
                 {activeSolution && (
                   <div className="space-y-2">
-                    <div className="flex gap-3 text-xs text-gray-500">
-                      <span>时间 <strong className="text-gray-700">{activeSolution.timeComplexity}</strong></span>
-                      <span className="text-gray-700">空间 {activeSolution.spaceComplexity}</span>
-                    </div>
                     <p className="text-xs text-gray-600 leading-relaxed">{activeSolution.explanation}</p>
                     <CodeBlock code={activeSolution.code} />
+                    <div className="flex gap-3 text-xs text-gray-500">
+                      <span>时间 <strong className="text-gray-700">{activeSolution.timeComplexity}</strong></span>
+                      <span>空间 <strong className="text-gray-700">{activeSolution.spaceComplexity}</strong></span>
+                    </div>
                   </div>
                 )}
               </div>
