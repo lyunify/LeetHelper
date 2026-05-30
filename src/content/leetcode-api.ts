@@ -107,8 +107,8 @@ function fetchViaMainWorld(body: object): Promise<unknown> {
 }
 
 const SOLUTION_DETAIL_QUERY = `
-  query ugcArticleSolution($slug: String!) {
-    ugcArticleSolution(slug: $slug) {
+  query ugcArticleSolutionArticle($slug: String!) {
+    ugcArticleSolutionArticle(slug: $slug) {
       content
     }
   }
@@ -116,11 +116,11 @@ const SOLUTION_DETAIL_QUERY = `
 
 export async function fetchSolutionContent(slug: string): Promise<string> {
   const json = await fetchViaMainWorld({
-    operationName: 'ugcArticleSolution',
+    operationName: 'ugcArticleSolutionArticle',
     query: SOLUTION_DETAIL_QUERY,
     variables: { slug },
   }) as {
-    data?: { ugcArticleSolution?: { content?: string } }
+    data?: { ugcArticleSolutionArticle?: { content?: string } }
     errors?: Array<{ message: string }>
   }
 
@@ -128,7 +128,7 @@ export async function fetchSolutionContent(slug: string): Promise<string> {
     throw new Error(`LeetCode API 错误: ${json.errors[0].message}`)
   }
 
-  const content = json.data?.ugcArticleSolution?.content ?? ''
+  const content = json.data?.ugcArticleSolutionArticle?.content ?? ''
   return extractCodeFromContent(content)
 }
 
