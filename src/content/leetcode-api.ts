@@ -48,40 +48,40 @@ export function getTitleSlug(): string | null {
   return match?.[1] ?? null
 }
 
-function decodeCode(raw: string): string {
-  // LeetCode stores newlines as literal \n in code blocks — decode them
-  let code = raw.includes('\n') ? raw : raw.replace(/\\n/g, '\n')
-  // Strip language prefix lines like "cpp []", "++ []", "python3 []"
-  code = code.replace(/^[^\n]{0,30}\[\]\s*\n/, '')
-  return code.trim()
+function stripLangPrefix(code: string): string {
+  // Strip language prefix lines like "cpp []", "++ []", "python3 []" at the start
+  return code.replace(/^[^\n]{0,40}\[\]\s*\n/, '').trim()
 }
 
 function looksLikeCode(text: string): boolean {
   if (text.length < 20) return false
-  // Skip test-case blocks
+  // Skip test-case / example blocks
   if (/^(Input|Output|Explanation|Example|Constraints)/.test(text)) return false
   return true
 }
 
 function extractCodeFromContent(html: string): string {
+  // Normalize literal \n sequences to actual newlines before any processing
+  const normalized = html.replace(/\\n/g, '\n')
+
   const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
+  const doc = parser.parseFromString(normalized, 'text/html')
 
   const codeEls = doc.querySelectorAll('pre code')
   for (const el of codeEls) {
-    const code = decodeCode(el.textContent?.trim() ?? '')
+    const code = stripLangPrefix(el.textContent?.trim() ?? '')
     if (looksLikeCode(code)) return code
   }
 
   const preEls = doc.querySelectorAll('pre')
   for (const el of preEls) {
-    const code = decodeCode(el.textContent?.trim() ?? '')
+    const code = stripLangPrefix(el.textContent?.trim() ?? '')
     if (looksLikeCode(code)) return code
   }
 
-  // Markdown fences — capture everything after the opening fence line
-  const fenceMatch = html.match(/```[^\n`]*\n([\s\S]*?)```/)
-  if (fenceMatch?.[1]?.trim()) return decodeCode(fenceMatch[1].trim())
+  // Markdown fences
+  const fenceMatch = normalized.match(/```[^\n`]*\n([\s\S]*?)```/)
+  if (fenceMatch?.[1]?.trim()) return stripLangPrefix(fenceMatch[1].trim())
 
   return ''
 }
