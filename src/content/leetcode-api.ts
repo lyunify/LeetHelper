@@ -35,6 +35,7 @@ const SOLUTIONS_QUERY = `
           slug
           summary
           hitCount
+          voteCount
           author {
             userSlug
             userName
@@ -278,7 +279,7 @@ export async function fetchTopSolutions(
       slug: String(node.slug ?? ''),
       title: String(node.title ?? ''),
       author: String((node.author as Record<string, unknown>)?.userName ?? (node.author as Record<string, unknown>)?.userSlug ?? 'anonymous'),
-      voteCount: Number(node.hitCount ?? 0),
+      voteCount: Number(node.voteCount ?? 0),
       rawContent: content,
       code: '',
       timeComplexity: '',
