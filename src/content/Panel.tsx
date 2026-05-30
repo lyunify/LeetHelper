@@ -28,11 +28,14 @@ const LANG_TO_HLJS: Record<string, string> = {
   Rust: 'rust', 'C#': 'csharp', Kotlin: 'kotlin', Swift: 'swift',
 }
 import type { AnalysisResult, ExtensionMessage, SolutionSource } from '../shared/types'
-import { getStorage } from '../shared/storage'
+import { getStorage, setStorage } from '../shared/storage'
 import { fetchTopSolutions, fetchSolutionContent, getTitleSlug } from './leetcode-api'
 import type { LeetCodeSolution } from './leetcode-api'
-import { addHistory, getHistory, clearHistory } from '../shared/history'
+import { addHistory, getHistory, clearHistory, calcStreak } from '../shared/history'
 import type { HistoryEntry } from '../shared/history'
+import { getCachedAnalysis, setCachedAnalysis } from '../shared/ai-cache'
+import { getProblemMeta, setProblemMeta } from '../shared/problem-meta'
+import type { ProblemStatus } from '../shared/problem-meta'
 import type { Difficulty } from './extractor'
 
 type PanelState = 'idle' | 'loading' | 'result' | 'error'
@@ -164,6 +167,9 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
   const [source, setSource] = useState<SolutionSource>('ai')
   const [panelTab, setPanelTab] = useState<PanelTab>('ai')
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([])
+  const [problemStatus, setProblemStatus] = useState<ProblemStatus>(null)
+  const [notes, setNotes] = useState('')
+  const [notesOpen, setNotesOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [codeSize, setCodeSize] = useState<'xs' | 'sm'>('xs')
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -198,6 +204,29 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
       chrome.storage.onChanged.addListener(onStorage)
       return () => { try { chrome.storage.onChanged.removeListener(onStorage) } catch { /* context gone */ } }
     } catch { /* context already gone on mount */ }
+  }, [])
+
+  // Load problem meta (status + notes)
+  useEffect(() => {
+    const slug = getTitleSlug()
+    if (!slug) return
+    getProblemMeta(slug).then(m => { setProblemStatus(m.status); setNotes(m.notes) })
+  }, [])
+
+  // Auto-detect LeetCode editor language and sync to storage
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const el =
+        document.querySelector('.ant-select-single .ant-select-selection-item') ??
+        document.querySelector('[data-testid="code-lang-selector"]')
+      if (!el) return
+      const text = el.textContent?.trim().toLowerCase() ?? ''
+      if (text.startsWith('python')) setStorage({ codingLanguage: 'python' })
+      else if (text === 'java') setStorage({ codingLanguage: 'java' })
+      else if (text.includes('javascript')) setStorage({ codingLanguage: 'javascript' })
+      else if (text.startsWith('c++') || text === 'cpp') setStorage({ codingLanguage: 'cpp' })
+    }, 1500) // wait for editor to render
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -334,10 +363,42 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
     e.preventDefault()
   }
 
+  function updateStatus(s: ProblemStatus) {
+    const slug = getTitleSlug()
+    if (!slug) return
+    const next = problemStatus === s ? null : s  // toggle off if same
+    setProblemStatus(next)
+    setProblemMeta(slug, { status: next })
+  }
+
+  function saveNotes(text: string) {
+    const slug = getTitleSlug()
+    if (!slug) return
+    setNotes(text)
+    setProblemMeta(slug, { notes: text })
+  }
+
+  function copyProblemUrl() {
+    const slug = getTitleSlug()
+    if (slug) copyToClipboard(`https://leetcode.com/problems/${slug}/`)
+    else copyToClipboard(location.href)
+  }
+
   const handleAnalyzeAI = async () => {
     setState('loading')
     try {
       const { codingLanguage, analysisLanguage } = await getStorage()
+      const slug = getTitleSlug() ?? title
+
+      // Check cache first
+      const cached = await getCachedAnalysis(slug, codingLanguage)
+      if (cached) {
+        setResult(cached)
+        setState('result')
+        addHistory({ slug, title, source: 'ai' })
+        return
+      }
+
       const response = await chrome.runtime.sendMessage({
         type: 'ANALYZE_PROBLEM',
         payload: { title, description, codingLanguage, analysisLanguage },
@@ -346,7 +407,8 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
       if (response.type === 'ANALYSIS_RESULT') {
         setResult(response.payload)
         setState('result')
-        addHistory({ slug: getTitleSlug() ?? title, title, source: 'ai' })
+        addHistory({ slug, title, source: 'ai' })
+        setCachedAnalysis(slug, codingLanguage, response.payload)
       } else if (response.type === 'ANALYSIS_ERROR') {
         setError(response.payload.message)
         setState('error')
@@ -412,6 +474,7 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
       e.preventDefault()
     }
 
+    const diffColor = difficulty === 'Easy' ? '#22c55e' : difficulty === 'Hard' ? '#ef4444' : '#f59e0b'
     return (
       <div
         onMouseDown={handleCollapsedMouseDown}
@@ -419,10 +482,16 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
         title="拖动调整位置，点击展开"
       >
         <div
-          className="bg-indigo-600 text-white px-1.5 py-4 rounded-l-lg text-xs font-bold shadow-lg hover:bg-indigo-700 transition-colors select-none"
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          className="text-white px-1.5 py-4 rounded-l-lg text-xs font-bold shadow-lg hover:opacity-90 transition-opacity select-none flex flex-col items-center gap-2"
+          style={{ background: '#4F46E5', writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
-          ▶ LeetHelper
+          <span>▶</span>
+          {difficulty && (
+            <span style={{ background: diffColor, borderRadius: 3, padding: '2px 4px', fontSize: 9, color: 'white' }}>
+              {difficulty[0]}
+            </span>
+          )}
+          {problemNumber && <span style={{ fontSize: 10, opacity: 0.8 }}>#{problemNumber}</span>}
         </div>
       </div>
     )
@@ -458,6 +527,7 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
             {problemNumber ? `#${problemNumber} ${problemTitle}` : problemTitle}
           </span>
           <div className="flex items-center gap-0.5 shrink-0" onMouseDown={e => e.stopPropagation()}>
+            <button onClick={copyProblemUrl} className="text-indigo-300 hover:text-white text-[10px] px-1 py-0.5 rounded" title="复制题目链接">🔗</button>
             <button
               onClick={() => setCodeSize('xs')}
               className={`text-[10px] px-1 py-0.5 rounded transition-colors ${codeSize === 'xs' ? 'bg-indigo-500 text-white' : 'text-indigo-300 hover:text-white'}`}
@@ -533,6 +603,43 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
             ))}
           </div>
 
+          {/* Problem status + notes — always visible on AI/LC tabs */}
+          {(panelTab === 'ai' || panelTab === 'leetcode') && (
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex gap-1">
+                {([['solved','✅','已解','bg-green-100 text-green-700 border-green-300'],['attempted','🔄','尝试','bg-yellow-100 text-yellow-700 border-yellow-300'],['todo','📌','待做','bg-blue-100 text-blue-700 border-blue-300']] as [ProblemStatus, string, string, string][]).map(([s, icon, label, activeStyle]) => (
+                  <button
+                    key={s}
+                    onClick={() => updateStatus(s)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors ${problemStatus === s ? activeStyle : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                  >
+                    {icon} {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setNotesOpen(o => !o)}
+                className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${notes ? 'border-indigo-300 text-indigo-500' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                title="笔记"
+              >
+                📝{notes ? ' •' : ''}
+              </button>
+            </div>
+          )}
+
+          {/* Notes textarea */}
+          {(panelTab === 'ai' || panelTab === 'leetcode') && notesOpen && (
+            <div className="mb-2">
+              <textarea
+                value={notes}
+                onChange={e => saveNotes(e.target.value)}
+                placeholder="写点笔记..."
+                className="w-full text-xs border border-gray-200 rounded p-2 resize-none focus:outline-none focus:border-indigo-300"
+                rows={3}
+              />
+            </div>
+          )}
+
           {/* Stats tab */}
           {panelTab === 'stats' && (() => {
             const now = Date.now()
@@ -555,43 +662,62 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
               }
             })
             const maxCount = Math.max(...days.map(d => d.count), 1)
+            const streak = calcStreak(historyEntries)
+            // Heatmap: last 84 days (12 weeks), Mon-Sun columns
+            const heatDays = Array.from({ length: 84 }, (_, i) => {
+              const d = new Date(now - (83 - i) * 86400000)
+              const start = new Date(d).setHours(0, 0, 0, 0)
+              return { start, count: historyEntries.filter(e => e.timestamp >= start && e.timestamp < start + 86400000).length }
+            })
+            const heatMax = Math.max(...heatDays.map(d => d.count), 1)
+            const heatColor = (c: number) => {
+              if (c === 0) return '#e5e7eb'
+              const intensity = Math.min(c / heatMax, 1)
+              if (intensity < 0.25) return '#c7d2fe'
+              if (intensity < 0.5) return '#818cf8'
+              if (intensity < 0.75) return '#6366f1'
+              return '#4338ca'
+            }
             return (
               <div className="space-y-4 lh-fade">
-                <div className="grid grid-cols-3 gap-2">
+                {/* Summary row */}
+                <div className="grid grid-cols-4 gap-1.5">
                   {[
                     { label: '今日', value: stats.today, color: 'text-indigo-600' },
                     { label: '本周', value: stats.thisWeek, color: 'text-indigo-600' },
                     { label: '总计', value: stats.total, color: 'text-gray-700' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-gray-50 rounded-lg p-2.5 text-center">
-                      <div className={`text-xl font-bold ${color}`}>{value}</div>
-                      <div className="text-[10px] text-gray-400">{label}</div>
+                    { label: '连续', value: streak, color: 'text-orange-500', suffix: '🔥' },
+                  ].map(({ label, value, color, suffix }) => (
+                    <div key={label} className="bg-gray-50 rounded-lg p-2 text-center">
+                      <div className={`text-lg font-bold ${color}`}>{suffix ?? ''}{value}</div>
+                      <div className="text-[9px] text-gray-400">{label}</div>
                     </div>
                   ))}
                 </div>
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1.5">来源分布</p>
-                  <div className="flex gap-2">
-                    <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
-                      <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
-                      <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
-                    </div>
-                    <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
-                      <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
-                      <div className="text-[10px] text-orange-400">🏆 社区题解</div>
-                    </div>
+                {/* Source breakdown */}
+                <div className="flex gap-2">
+                  <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
+                    <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
+                    <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
+                  </div>
+                  <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
+                    <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
+                    <div className="text-[10px] text-orange-400">🏆 社区题解</div>
                   </div>
                 </div>
+                {/* Heatmap */}
                 <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 7 天</p>
-                  <div className="flex items-end gap-1 h-16">
-                    {days.map(({ label, count }) => (
-                      <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                        <div
-                          className="w-full bg-indigo-400 rounded-sm transition-all"
-                          style={{ height: `${(count / maxCount) * 48}px`, minHeight: count > 0 ? 4 : 0 }}
-                        />
-                        <span className="text-[9px] text-gray-400">{label}</span>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 12 周</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
+                    {Array.from({ length: 12 }, (_, week) => (
+                      <div key={week} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {heatDays.slice(week * 7, week * 7 + 7).map((d, di) => (
+                          <div
+                            key={di}
+                            title={`${new Date(d.start).toLocaleDateString()}: ${d.count} 题`}
+                            style={{ width: '100%', aspectRatio: '1', borderRadius: 2, background: heatColor(d.count) }}
+                          />
+                        ))}
                       </div>
                     ))}
                   </div>
@@ -802,15 +928,6 @@ function PanelInner({ title, description, difficulty }: PanelProps) {
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs font-medium text-gray-700 leading-snug flex-1">{currentLcSolution.title}</p>
-                      <a
-                        href={`https://leetcode.com/problems/${getTitleSlug()}/solutions/${currentLcSolution.slug}/`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[10px] text-indigo-400 hover:text-indigo-600 shrink-0 mt-0.5"
-                        title="在 LeetCode 查看原文"
-                      >
-                        原文 ↗
-                      </a>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                       <span>@{currentLcSolution.author}</span>

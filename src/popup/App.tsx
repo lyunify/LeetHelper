@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { StorageData, ApiProvider, CodingLanguage, AnalysisLanguage } from '../shared/types'
 import { getStorage, setStorage } from '../shared/storage'
-import { getHistory, clearHistory } from '../shared/history'
+import { getHistory, clearHistory, calcStreak } from '../shared/history'
 import type { HistoryEntry } from '../shared/history'
 
 type View = 'onboarding' | 'settings' | 'history' | 'stats'
@@ -214,18 +214,22 @@ function StatsView({ onBack }: { onBack: () => void }) {
     ai: entries.filter(e => e.source === 'ai').length,
     lc: entries.filter(e => e.source === 'lc').length,
   }
+  const streak = calcStreak(entries)
 
-  // Last 7 days bar chart data
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now - (6 - i) * 86400000)
-    const start = new Date(d).setHours(0, 0, 0, 0)
-    const end = start + 86400000
-    return {
-      label: d.toLocaleDateString([], { weekday: 'short' }),
-      count: entries.filter(e => e.timestamp >= start && e.timestamp < end).length,
-    }
+  // Heatmap: last 84 days (12 weeks)
+  const heatDays = Array.from({ length: 84 }, (_, i) => {
+    const start = new Date(now - (83 - i) * 86400000).setHours(0, 0, 0, 0)
+    return { start, count: entries.filter(e => e.timestamp >= start && e.timestamp < start + 86400000).length }
   })
-  const maxCount = Math.max(...days.map(d => d.count), 1)
+  const heatMax = Math.max(...heatDays.map(d => d.count), 1)
+  const heatColor = (c: number) => {
+    if (c === 0) return '#e5e7eb'
+    const t = Math.min(c / heatMax, 1)
+    if (t < 0.25) return '#c7d2fe'
+    if (t < 0.5) return '#818cf8'
+    if (t < 0.75) return '#6366f1'
+    return '#4338ca'
+  }
 
   return (
     <div className="w-72 font-sans bg-white">
@@ -236,46 +240,46 @@ function StatsView({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Summary cards with streak */}
+        <div className="grid grid-cols-4 gap-1.5">
           {[
             { label: '今日', value: stats.today, color: 'text-indigo-600' },
             { label: '本周', value: stats.thisWeek, color: 'text-indigo-600' },
             { label: '总计', value: stats.total, color: 'text-gray-700' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-gray-50 rounded-lg p-2.5 text-center">
-              <div className={`text-xl font-bold ${color}`}>{value}</div>
+            { label: '连续', value: streak, color: 'text-orange-500', suffix: '🔥' },
+          ].map(({ label, value, color, suffix }) => (
+            <div key={label} className="bg-gray-50 rounded-lg p-2 text-center">
+              <div className={`text-lg font-bold ${color}`}>{suffix ?? ''}{value}</div>
               <div className="text-[10px] text-gray-400">{label}</div>
             </div>
           ))}
         </div>
 
         {/* AI vs LC breakdown */}
-        <div>
-          <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1.5">来源分布</p>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
-              <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
-              <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
-            </div>
-            <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
-              <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
-              <div className="text-[10px] text-orange-400">🏆 社区题解</div>
-            </div>
+        <div className="flex gap-2">
+          <div className="flex-1 bg-indigo-50 rounded-lg p-2 text-center">
+            <div className="text-sm font-bold text-indigo-600">{stats.ai}</div>
+            <div className="text-[10px] text-indigo-400">✨ AI 解析</div>
+          </div>
+          <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
+            <div className="text-sm font-bold text-orange-600">{stats.lc}</div>
+            <div className="text-[10px] text-orange-400">🏆 社区题解</div>
           </div>
         </div>
 
-        {/* 7-day bar chart */}
+        {/* Heatmap */}
         <div>
-          <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 7 天</p>
-          <div className="flex items-end gap-1 h-16">
-            {days.map(({ label, count }) => (
-              <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                <div
-                  className="w-full bg-indigo-400 rounded-sm transition-all"
-                  style={{ height: `${(count / maxCount) * 48}px`, minHeight: count > 0 ? 4 : 0 }}
-                />
-                <span className="text-[9px] text-gray-400">{label}</span>
+          <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">过去 12 周</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 2 }}>
+            {Array.from({ length: 12 }, (_, week) => (
+              <div key={week} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {heatDays.slice(week * 7, week * 7 + 7).map((d, di) => (
+                  <div
+                    key={di}
+                    title={`${new Date(d.start).toLocaleDateString()}: ${d.count} 题`}
+                    style={{ width: '100%', aspectRatio: '1', borderRadius: 2, background: heatColor(d.count) }}
+                  />
+                ))}
               </div>
             ))}
           </div>
